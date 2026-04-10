@@ -20,6 +20,8 @@ BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR.parent / "models" / "multitask_finetuned.keras"
 FALLBACK_MODEL_PATH = BASE_DIR.parent / "models" / "multitask_best.keras"
 LABEL_MAP_PATH = BASE_DIR.parent / "manifests" / "label_map.json"
+print("MODEL PATH:", MODEL_PATH)
+print("EXISTS:", MODEL_PATH.exists())
 
 # ✅ Model fallback
 if not MODEL_PATH.exists() and FALLBACK_MODEL_PATH.exists():
