@@ -8,6 +8,7 @@ import numpy as np
 from tensorflow.keras.models import load_model
 import json
 from flask_cors import CORS
+import gdown   # ✅ ADDED
 
 app = Flask(__name__)
 
@@ -20,6 +21,17 @@ BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR / "models/multitask_finetuned.keras"
 FALLBACK_MODEL_PATH = BASE_DIR / "models/multitask_best.keras"
 LABEL_MAP_PATH = BASE_DIR / "manifests/label_map.json"
+
+# ✅ ADDED DOWNLOAD BLOCK (IMPORTANT)
+MODEL_PATH.parent.mkdir(exist_ok=True)
+
+if not MODEL_PATH.exists():
+    print("Downloading main model...")
+    gdown.download("https://drive.google.com/uc?id=1ClzyqzqoZBlp7dcNlnX_xBQvUFtt29QL", str(MODEL_PATH), quiet=False)
+
+if not FALLBACK_MODEL_PATH.exists():
+    print("Downloading fallback model...")
+    gdown.download("https://drive.google.com/uc?id=1sHSBOzRgDfr0ZLgMBnU2-PVLpy_vCM3-", str(FALLBACK_MODEL_PATH), quiet=False)
 
 print("MODEL PATH:", MODEL_PATH)
 print("EXISTS:", MODEL_PATH.exists())
@@ -40,7 +52,7 @@ if not LABEL_MAP_PATH.exists():
 with open(LABEL_MAP_PATH, 'r') as f:
     label_map = json.load(f)
 
-# ✅ ADD THIS BLOCK (SAFE MODEL LOAD)
+# ✅ SAFE MODEL LOAD
 try:
     print("MODEL PATH:", MODEL_PATH)
     print("EXISTS:", MODEL_PATH.exists())
@@ -52,7 +64,6 @@ except Exception as e:
 
 species_idx_to_name = {int(k): v for k, v in label_map['idx2species'].items()}
 health_idx_to_name = {int(k): v for k, v in label_map['idx2health'].items()}
-
 
 
 @app.route("/image/upload", methods=["POST"])
@@ -67,7 +78,6 @@ def image_upload():
 
         file = request.files["file"]
 
-        # ✅ Secure unique filename
         file_extension = os.path.splitext(file.filename)[1]
         unique_name = uuid.uuid4().hex
         hash_filename = sha512(unique_name.encode()).hexdigest() + file_extension
@@ -78,7 +88,6 @@ def image_upload():
         file_path = images_dir / hash_filename
         file.save(str(file_path))
 
-        # ✅ Read image
         img = cv2.imread(str(file_path))
         if img is None:
             return jsonify({"error": "Invalid image"}), 400
@@ -88,7 +97,6 @@ def image_upload():
         img = img.astype(np.float32) / 255.0
         img = np.expand_dims(img, axis=0)
 
-        # ✅ Prediction
         preds = model.predict(img)
 
         if isinstance(preds, dict):
