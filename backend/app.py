@@ -10,6 +10,9 @@ import json
 from flask_cors import CORS
 import gdown
 
+# 🔴 Hide TensorFlow warnings
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+
 app = Flask(__name__)
 CORS(app)
 
@@ -19,10 +22,13 @@ MODEL_PATH = BASE_DIR / "models/multitask_finetuned.keras"
 FALLBACK_MODEL_PATH = BASE_DIR / "models/multitask_best.keras"
 LABEL_MAP_PATH = BASE_DIR / "manifests/label_map.json"
 
+model = None  # global model
+
 # ✅ Load label map safely
 try:
     with open(LABEL_MAP_PATH, 'r') as f:
         label_map = json.load(f)
+    print("Label map loaded ✅")
 except Exception as e:
     print("Label map error ❌:", e)
     label_map = {"idx2species": {}, "idx2health": {}}
@@ -30,52 +36,55 @@ except Exception as e:
 species_idx_to_name = {int(k): v for k, v in label_map.get('idx2species', {}).items()}
 health_idx_to_name = {int(k): v for k, v in label_map.get('idx2health', {}).items()}
 
-model = None  # global model
 
-
-# ✅ ENSURE MODEL FUNCTION (KEY FIX)
+# ✅ MODEL LOADER (ROBUST)
 def ensure_model():
     global model
 
     if model is not None:
         return True
 
-    print("Checking model...")
+    print("🔄 Checking model...")
 
     MODEL_PATH.parent.mkdir(exist_ok=True)
 
-    # Download main model
-    if not MODEL_PATH.exists():
-        print("Downloading main model...")
-        gdown.download(
-            "https://drive.google.com/uc?id=1ClzyqzqoZBlp7dcNlnX_xBQvUFtt29QL",
-            str(MODEL_PATH),
-            quiet=False
-        )
+    # Download models if missing
+    try:
+        if not MODEL_PATH.exists():
+            print("⬇️ Downloading main model...")
+            gdown.download(
+                "https://drive.google.com/uc?id=1ClzyqzqoZBlp7dcNlnX_xBQvUFtt29QL",
+                str(MODEL_PATH),
+                quiet=False
+            )
 
-    # Download fallback
-    if not FALLBACK_MODEL_PATH.exists():
-        print("Downloading fallback model...")
-        gdown.download(
-            "https://drive.google.com/uc?id=1sHSBOzRgDfr0ZLgMBnU2-PVLpy_vCM3-",
-            str(FALLBACK_MODEL_PATH),
-            quiet=False
-        )
+        if not FALLBACK_MODEL_PATH.exists():
+            print("⬇️ Downloading fallback model...")
+            gdown.download(
+                "https://drive.google.com/uc?id=1sHSBOzRgDfr0ZLgMBnU2-PVLpy_vCM3-",
+                str(FALLBACK_MODEL_PATH),
+                quiet=False
+            )
+    except Exception as e:
+        print("Download error ❌:", e)
+        return False
+
+    print("📁 Model exists:", MODEL_PATH.exists())
 
     # Try loading main model
     try:
-        print("Loading main model...")
+        print("⚙️ Loading main model...")
         model = load_model(str(MODEL_PATH), compile=False)
-        print("Model loaded ✅")
+        print("✅ Main model loaded")
         return True
     except Exception as e:
         print("Main model failed ❌:", e)
 
     # Try fallback model
     try:
-        print("Loading fallback model...")
+        print("⚙️ Loading fallback model...")
         model = load_model(str(FALLBACK_MODEL_PATH), compile=False)
-        print("Fallback model loaded ✅")
+        print("✅ Fallback model loaded")
         return True
     except Exception as e:
         print("Fallback model failed ❌:", e)
@@ -100,6 +109,7 @@ def image_upload():
 
         file = request.files["file"]
 
+        # ✅ Unique filename
         file_extension = os.path.splitext(file.filename)[1]
         unique_name = uuid.uuid4().hex
         hash_filename = sha512(unique_name.encode()).hexdigest() + file_extension
@@ -110,15 +120,18 @@ def image_upload():
         file_path = images_dir / hash_filename
         file.save(str(file_path))
 
+        # ✅ Read image
         img = cv2.imread(str(file_path))
         if img is None:
             return jsonify({"error": "Invalid image"}), 400
 
+        # ✅ Preprocess
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = cv2.resize(img, (256, 256))
         img = img.astype(np.float32) / 255.0
         img = np.expand_dims(img, axis=0)
 
+        # ✅ Predict
         preds = model.predict(img)
 
         if isinstance(preds, dict):
@@ -136,9 +149,11 @@ def image_upload():
         })
 
     except Exception as e:
-        print("Error:", e)
+        print("🔥 Error:", e)
         return jsonify({"error": str(e)}), 500
 
 
+# ✅ Dynamic PORT for Railway/Render
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
