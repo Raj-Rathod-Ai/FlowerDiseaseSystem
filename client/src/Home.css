@@ -1,0 +1,133 @@
+.hero__bg{
+    min-height: 100vh;
+    background: radial-gradient(circle at top left, rgba(123, 199, 133, 0.18), transparent 35%),
+      linear-gradient(180deg, rgba(14, 45, 24, 0.95), rgba(4, 12, 9, 0.95));
+    padding-bottom: 80px;
+}
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.brand__logo {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    object-fit: cover;
+    animation: rotate 20s linear infinite;
+}
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.brand__name {
+    color: #e9f5e9;
+    font-size: 26px;
+    letter-spacing: 1px;
+    animation: fadeIn 1s ease-in;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+li.nav__items{
+    font-size: 16px;
+    padding-bottom: 15px;
+    color: #dbe9d9;
+}
+.home__content{
+    padding: 160px 0px;
+}
+h1.home__text{
+    font-size: 20px;
+    font-weight: 400;
+    letter-spacing: 2px;
+    color: rgba(197, 230, 204, 0.9)!important;
+}
+h2.home__text{
+    font-size: 60px;
+    line-height: 1.05;
+    font-weight: 800;
+    font-family: 'Montserrat', sans-serif;
+    color: #f3f9f1;
+    overflow: hidden;
+    border-right: 3px solid #f3f9f1;
+    white-space: nowrap;
+    animation: typing 3s steps(40, end), blink-caret 0.75s step-end infinite;
+}
+@keyframes typing {
+    from { width: 0; }
+    to { width: 100%; }
+}
+@keyframes blink-caret {
+    from, to { border-color: transparent; }
+    50% { border-color: #f3f9f1; }
+}
+h3.home__text{
+    font-size: 42px;
+    font-weight: 700;
+    font-family: 'Montserrat', sans-serif;
+    line-height: 1.1;
+    color: #afe3b2;
+}
+h4.home__text{
+    font-size: 48px;
+    font-weight: 700;
+    line-height: 1.1;
+    font-family: 'Montserrat', sans-serif;
+}
+.header{
+    transition: .4s all ease;
+}
+.header.active{
+    position: fixed;
+    z-index: 1000;
+    width: 100%;
+    padding: 0px 30px;
+    background-color: #191919;
+}
+
+ul.sidebar.d__flex {
+    flex-wrap: wrap;
+    height: 100%;
+    position: fixed;
+    right: 0%;
+    background: #010101;
+    justify-content: center;
+    width: 300px;
+    top: 0%;
+    flex-direction: column;
+}
+li.sideNavbar{
+    padding: 25px 30px;
+}
+/* RESPONSIVE */
+@media only screen and (max-width: 768px){
+ .header{
+     justify-content: space-between;
+ }
+ .navigation.pxy__30 {
+        display: none;
+    }
+h2.white.pz__10 {
+    font-size: 50px!important;
+}
+svg.bi.bi-justify.white.pointer {
+    width: 30px;
+    height: 30px;
+}
+}
+@media only screen and (max-width: 425px){
+    h2.home__text.pz__10{
+    font-size: 32px;
+}
+h3.sweet.pz__10 {
+    font-size: 40px;
+}
+h1.home__text {
+    font-size: 14px;
+}
+h4.home__text {
+    font-size: 45px;
+}
+}
