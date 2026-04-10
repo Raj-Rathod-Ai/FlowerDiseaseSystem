@@ -8,69 +8,91 @@ import numpy as np
 from tensorflow.keras.models import load_model
 import json
 from flask_cors import CORS
-import gdown   # ✅ ADDED
+import gdown
 
 app = Flask(__name__)
-
-# ✅ Allow all origins (important for deployment)
 CORS(app)
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# ✅ Correct paths (ensure these folders exist in GitHub)
 MODEL_PATH = BASE_DIR / "models/multitask_finetuned.keras"
 FALLBACK_MODEL_PATH = BASE_DIR / "models/multitask_best.keras"
 LABEL_MAP_PATH = BASE_DIR / "manifests/label_map.json"
 
-# ✅ ADDED DOWNLOAD BLOCK (IMPORTANT)
-MODEL_PATH.parent.mkdir(exist_ok=True)
-
-if not MODEL_PATH.exists():
-    print("Downloading main model...")
-    gdown.download("https://drive.google.com/uc?id=1ClzyqzqoZBlp7dcNlnX_xBQvUFtt29QL", str(MODEL_PATH), quiet=False)
-
-if not FALLBACK_MODEL_PATH.exists():
-    print("Downloading fallback model...")
-    gdown.download("https://drive.google.com/uc?id=1sHSBOzRgDfr0ZLgMBnU2-PVLpy_vCM3-", str(FALLBACK_MODEL_PATH), quiet=False)
-
-print("MODEL PATH:", MODEL_PATH)
-print("EXISTS:", MODEL_PATH.exists())
-
-print("Loading model now...")
-
-# ✅ Model fallback
-if not MODEL_PATH.exists() and FALLBACK_MODEL_PATH.exists():
-    MODEL_PATH = FALLBACK_MODEL_PATH
-
-if not MODEL_PATH.exists():
-    raise FileNotFoundError(f"Model not found: {MODEL_PATH}")
-
-if not LABEL_MAP_PATH.exists():
-    raise FileNotFoundError(f"Label map not found: {LABEL_MAP_PATH}")
-
-# ✅ Load label map
-with open(LABEL_MAP_PATH, 'r') as f:
-    label_map = json.load(f)
-
-# ✅ SAFE MODEL LOAD
+# ✅ Load label map safely
 try:
-    print("MODEL PATH:", MODEL_PATH)
-    print("EXISTS:", MODEL_PATH.exists())
-    model = load_model(str(MODEL_PATH), compile=False)
-    print("Model loaded ✅")
+    with open(LABEL_MAP_PATH, 'r') as f:
+        label_map = json.load(f)
 except Exception as e:
-    print("Model load error ❌:", e)
-    model = None
+    print("Label map error ❌:", e)
+    label_map = {"idx2species": {}, "idx2health": {}}
 
-species_idx_to_name = {int(k): v for k, v in label_map['idx2species'].items()}
-health_idx_to_name = {int(k): v for k, v in label_map['idx2health'].items()}
+species_idx_to_name = {int(k): v for k, v in label_map.get('idx2species', {}).items()}
+health_idx_to_name = {int(k): v for k, v in label_map.get('idx2health', {}).items()}
+
+model = None  # global model
+
+
+# ✅ ENSURE MODEL FUNCTION (KEY FIX)
+def ensure_model():
+    global model
+
+    if model is not None:
+        return True
+
+    print("Checking model...")
+
+    MODEL_PATH.parent.mkdir(exist_ok=True)
+
+    # Download main model
+    if not MODEL_PATH.exists():
+        print("Downloading main model...")
+        gdown.download(
+            "https://drive.google.com/uc?id=1ClzyqzqoZBlp7dcNlnX_xBQvUFtt29QL",
+            str(MODEL_PATH),
+            quiet=False
+        )
+
+    # Download fallback
+    if not FALLBACK_MODEL_PATH.exists():
+        print("Downloading fallback model...")
+        gdown.download(
+            "https://drive.google.com/uc?id=1sHSBOzRgDfr0ZLgMBnU2-PVLpy_vCM3-",
+            str(FALLBACK_MODEL_PATH),
+            quiet=False
+        )
+
+    # Try loading main model
+    try:
+        print("Loading main model...")
+        model = load_model(str(MODEL_PATH), compile=False)
+        print("Model loaded ✅")
+        return True
+    except Exception as e:
+        print("Main model failed ❌:", e)
+
+    # Try fallback model
+    try:
+        print("Loading fallback model...")
+        model = load_model(str(FALLBACK_MODEL_PATH), compile=False)
+        print("Fallback model loaded ✅")
+        return True
+    except Exception as e:
+        print("Fallback model failed ❌:", e)
+
+    return False
+
+
+@app.route("/")
+def home():
+    return "Backend Running ✅"
 
 
 @app.route("/image/upload", methods=["POST"])
 def image_upload():
     try:
-        # ✅ ADD SAFETY CHECK
-        if model is None:
+        # ✅ Ensure model loads dynamically
+        if not ensure_model():
             return jsonify({"error": "Model not loaded"}), 500
 
         if "file" not in request.files:
@@ -100,8 +122,8 @@ def image_upload():
         preds = model.predict(img)
 
         if isinstance(preds, dict):
-            species_pred = preds["species"]
-            health_pred = preds["health"]
+            species_pred = preds.get("species")
+            health_pred = preds.get("health")
         else:
             species_pred, health_pred = preds
 
@@ -114,7 +136,7 @@ def image_upload():
         })
 
     except Exception as e:
-        print(e)
+        print("Error:", e)
         return jsonify({"error": str(e)}), 500
 
 
