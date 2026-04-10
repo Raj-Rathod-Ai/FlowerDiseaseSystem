@@ -3,4 +3,5 @@ flask-cors
 numpy==1.23.5
 opencv-python-headless
 tensorflow==2.10.0
-python-3.9.18
+setuptools
+wheel
