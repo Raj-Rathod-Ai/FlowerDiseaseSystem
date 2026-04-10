@@ -24,6 +24,8 @@ LABEL_MAP_PATH = BASE_DIR / "manifests/label_map.json"
 print("MODEL PATH:", MODEL_PATH)
 print("EXISTS:", MODEL_PATH.exists())
 
+print("Loading model now...")
+
 # ✅ Model fallback
 if not MODEL_PATH.exists() and FALLBACK_MODEL_PATH.exists():
     MODEL_PATH = FALLBACK_MODEL_PATH
