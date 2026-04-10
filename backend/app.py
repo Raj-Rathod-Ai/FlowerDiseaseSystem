@@ -19,12 +19,29 @@ CORS(app)
 BASE_DIR = Path(__file__).resolve().parent
 
 MODEL_PATH = BASE_DIR / "models/multitask_finetuned.keras"
-FALLBACK_MODEL_PATH = BASE_DIR / "models/multitask_best.keras"
 LABEL_MAP_PATH = BASE_DIR / "manifests/label_map.json"
 
 model = None  # global model
 
-# ✅ Load label map safely
+# ✅ SAFE MODEL LOAD FUNCTION
+def safe_load_model(path):
+    try:
+        print("Trying normal load...")
+        return load_model(path, compile=False)
+    except Exception as e:
+        print("Normal load failed ❌:", e)
+
+    try:
+        print("Trying with compile=True...")
+        return load_model(path)
+    except Exception as e:
+        print("Compile load failed ❌:", e)
+
+    print("All load attempts failed ❌")
+    return None
+
+
+# ✅ LOAD LABEL MAP
 try:
     with open(LABEL_MAP_PATH, 'r') as f:
         label_map = json.load(f)
@@ -37,59 +54,47 @@ species_idx_to_name = {int(k): v for k, v in label_map.get('idx2species', {}).it
 health_idx_to_name = {int(k): v for k, v in label_map.get('idx2health', {}).items()}
 
 
-# ✅ MODEL LOADER (ROBUST)
+# ✅ ENSURE MODEL FUNCTION
 def ensure_model():
     global model
 
     if model is not None:
         return True
 
-    print("🔄 Checking model...")
+    print("Checking model...")
 
     MODEL_PATH.parent.mkdir(exist_ok=True)
 
-    # Download models if missing
-    try:
-        if not MODEL_PATH.exists():
-            print("⬇️ Downloading main model...")
+    # Download model if not exists
+    if not MODEL_PATH.exists():
+        print("Downloading model from Google Drive...")
+        try:
             gdown.download(
                 "https://drive.google.com/uc?id=1ClzyqzqoZBlp7dcNlnX_xBQvUFtt29QL",
                 str(MODEL_PATH),
                 quiet=False
             )
+        except Exception as e:
+            print("Download error ❌:", e)
+            return False
 
-        if not FALLBACK_MODEL_PATH.exists():
-            print("⬇️ Downloading fallback model...")
-            gdown.download(
-                "https://drive.google.com/uc?id=1sHSBOzRgDfr0ZLgMBnU2-PVLpy_vCM3-",
-                str(FALLBACK_MODEL_PATH),
-                quiet=False
-            )
-    except Exception as e:
-        print("Download error ❌:", e)
+    print("File exists:", MODEL_PATH.exists())
+
+    if not MODEL_PATH.exists():
+        print("Model still missing ❌")
         return False
 
-    print("📁 Model exists:", MODEL_PATH.exists())
+    # Load model safely
+    print("Loading model...")
+    model_loaded = safe_load_model(str(MODEL_PATH))
 
-    # Try loading main model
-    try:
-        print("⚙️ Loading main model...")
-        model = load_model(str(MODEL_PATH), compile=False)
-        print("✅ Main model loaded")
-        return True
-    except Exception as e:
-        print("Main model failed ❌:", e)
+    if model_loaded is None:
+        print("Model load failed ❌")
+        return False
 
-    # Try fallback model
-    try:
-        print("⚙️ Loading fallback model...")
-        model = load_model(str(FALLBACK_MODEL_PATH), compile=False)
-        print("✅ Fallback model loaded")
-        return True
-    except Exception as e:
-        print("Fallback model failed ❌:", e)
-
-    return False
+    model = model_loaded
+    print("Model loaded successfully ✅")
+    return True
 
 
 @app.route("/")
@@ -100,7 +105,7 @@ def home():
 @app.route("/image/upload", methods=["POST"])
 def image_upload():
     try:
-        # ✅ Ensure model loads dynamically
+        # Ensure model
         if not ensure_model():
             return jsonify({"error": "Model not loaded"}), 500
 
@@ -109,29 +114,29 @@ def image_upload():
 
         file = request.files["file"]
 
-        # ✅ Unique filename
+        # Save file
         file_extension = os.path.splitext(file.filename)[1]
         unique_name = uuid.uuid4().hex
-        hash_filename = sha512(unique_name.encode()).hexdigest() + file_extension
+        filename = sha512(unique_name.encode()).hexdigest() + file_extension
 
         images_dir = BASE_DIR / "images"
         images_dir.mkdir(exist_ok=True)
 
-        file_path = images_dir / hash_filename
+        file_path = images_dir / filename
         file.save(str(file_path))
 
-        # ✅ Read image
+        # Read image
         img = cv2.imread(str(file_path))
         if img is None:
             return jsonify({"error": "Invalid image"}), 400
 
-        # ✅ Preprocess
+        # Preprocess
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = cv2.resize(img, (256, 256))
         img = img.astype(np.float32) / 255.0
         img = np.expand_dims(img, axis=0)
 
-        # ✅ Predict
+        # Predict
         preds = model.predict(img)
 
         if isinstance(preds, dict):
@@ -149,11 +154,11 @@ def image_upload():
         })
 
     except Exception as e:
-        print("🔥 Error:", e)
+        print("Error:", e)
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ Dynamic PORT for Railway/Render
+# ✅ Dynamic port (Railway / Render)
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
