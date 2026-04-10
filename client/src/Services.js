@@ -39,7 +39,7 @@ function Service() {
     const formData = new FormData();
     formData.append("file", selectedFile);
 
-    fetch("http://localhost:5000/image/upload", {
+    fetch("https://flowerdiseasesystem.onrender.com/image/upload", {
       method: "POST",
       body: formData,
     })
