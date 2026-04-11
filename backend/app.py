@@ -20,34 +20,33 @@ LABEL_MAP_PATH = BASE_DIR / "manifests" / "label_map.json"
 MODEL_DIR      = BASE_DIR / "models"
 MODEL_PATH     = MODEL_DIR / "multitask_finetuned.keras"
 
-HF_REPO_ID       = "rathodraj/flower-disease-models"
-HF_MODEL_FILE    = "multitask_finetuned.keras"   # filename inside the HF repo
+HF_REPO_ID    = "rathodraj/flower-disease-models"
+HF_MODEL_FILE = "multitask_finetuned.keras"
 
 model = None
 
 
 def download_model_from_hf():
-    """Download the .keras file from HuggingFace to local disk using huggingface_hub."""
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
     if MODEL_PATH.exists() and MODEL_PATH.stat().st_size > 10_000_000:
-        print(f"[MODEL] Already cached locally ({MODEL_PATH.stat().st_size / 1e6:.1f} MB)", flush=True)
+        print(f"[MODEL] Already cached ({MODEL_PATH.stat().st_size / 1e6:.1f} MB)", flush=True)
         return True
 
-    print(f"[MODEL] Downloading from HuggingFace repo: {HF_REPO_ID} ...", flush=True)
+    print("[MODEL] Downloading from HuggingFace...", flush=True)
     try:
         from huggingface_hub import hf_hub_download
-        local_path = hf_hub_download(
+        hf_hub_download(
             repo_id=HF_REPO_ID,
             filename=HF_MODEL_FILE,
             local_dir=str(MODEL_DIR),
             local_dir_use_symlinks=False,
         )
-        size_mb = Path(local_path).stat().st_size / 1e6
-        print(f"[MODEL] Downloaded to {local_path} ({size_mb:.1f} MB)", flush=True)
+        size_mb = MODEL_PATH.stat().st_size / 1e6
+        print(f"[MODEL] Downloaded ({size_mb:.1f} MB)", flush=True)
         return size_mb > 10
     except Exception as e:
-        print(f"[MODEL] HuggingFace download failed: {e}", flush=True)
+        print(f"[MODEL] Download failed: {e}", flush=True)
         return False
 
 
@@ -58,17 +57,30 @@ def ensure_model():
         return True
 
     if not download_model_from_hf():
-        print("[MODEL] Could not download model ❌", flush=True)
         return False
 
-    print(f"[MODEL] Loading from local path: {MODEL_PATH}", flush=True)
+    print(f"[MODEL] Loading from {MODEL_PATH}...", flush=True)
     try:
         import keras
         print(f"[MODEL] Keras version: {keras.__version__}", flush=True)
-        # ✅ Load from local file — no gfile / tensorflow needed
+
+        # ✅ FIX: Patch BatchNormalization to silently drop renorm args
+        # This handles models saved with older Keras that had renorm support
+        from keras.layers import BatchNormalization as _BN
+        _orig_init = _BN.__init__
+
+        def _patched_init(self, *args, **kwargs):
+            kwargs.pop("renorm", None)
+            kwargs.pop("renorm_clipping", None)
+            kwargs.pop("renorm_momentum", None)
+            _orig_init(self, *args, **kwargs)
+
+        _BN.__init__ = _patched_init
+
         model = keras.models.load_model(str(MODEL_PATH), compile=False)
         print("[MODEL] Model loaded ✅", flush=True)
         return True
+
     except Exception as e:
         print(f"[MODEL] Load failed ❌: {e}", flush=True)
         return False
