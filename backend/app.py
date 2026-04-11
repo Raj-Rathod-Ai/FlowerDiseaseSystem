@@ -21,7 +21,7 @@ LABEL_MAP_PATH = BASE_DIR / "manifests" / "label_map.json"
 
 # ✅ Set your Hugging Face repo here
 # Format: "your-hf-username/your-repo-name"
-HF_REPO_ID = "YOUR_HF_USERNAME/flower-disease-models"
+HF_REPO_ID = "rathodraj/flower-disease-models"
 HF_MODEL_FILENAME = "multitask_finetuned.keras"
 
 model = None
