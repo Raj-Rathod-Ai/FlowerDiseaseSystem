@@ -1,8 +1,16 @@
-flask
-flask-cors
-gunicorn
-tensorflow-cpu==2.10.0
-numpy==1.23.5
-opencv-python-headless
-gdown
-huggingface_hub
+# Keras 3 with JAX backend — matches how the model was trained and saved
+keras==3.3.3
+jax[cpu]==0.4.28
+jaxlib==0.4.28
+
+# Flask
+flask==3.1.3
+flask-cors==6.0.2
+gunicorn==23.0.0
+
+# Image processing
+opencv-python-headless==4.11.0.86
+numpy==1.26.4
+
+# HuggingFace (for hf:// model loading)
+huggingface_hub==1.8.0
