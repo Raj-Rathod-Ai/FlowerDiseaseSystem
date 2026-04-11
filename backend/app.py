@@ -8,6 +8,7 @@ import numpy as np
 import json
 from flask_cors import CORS
 from huggingface_hub import hf_hub_download
+import gdown
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
@@ -15,82 +16,50 @@ app = Flask(__name__)
 CORS(app)
 
 BASE_DIR = Path(__file__).resolve().parent
+
 MODEL_PATH = BASE_DIR / "models" / "multitask_finetuned.keras"
 LABEL_MAP_PATH = BASE_DIR / "manifests" / "label_map.json"
 
 HF_REPO_ID = "rathodraj/flower-disease-models"
 HF_MODEL_FILENAME = "multitask_finetuned.keras"
 
+GDRIVE_URL = "https://drive.google.com/uc?export=download&id=1ClzyqzqoZBlp7dcNlnX_xBQvUFtt29QL"
+
 model = None
 
-# Keys to strip from layer configs that were added in newer Keras
-# but don't exist in the installed Keras 3.x version
-LEGACY_KEYS = {
-    "keras.layers.BatchNormalization": ["renorm", "renorm_clipping", "renorm_momentum"],
-    "keras.layers.Dense": ["quantization_config"],
-}
 
-
-def patch_keras_layers():
-    """
-    Monkey-patch Keras layer __init__ methods to silently drop
-    config keys that don't exist in the installed Keras version.
-    """
-    import keras
-
-    patches = [
-        (keras.layers.BatchNormalization, ["renorm", "renorm_clipping", "renorm_momentum"]),
-        (keras.layers.Dense, ["quantization_config"]),
-    ]
-
-    originals = {}
-    for layer_cls, keys_to_strip in patches:
-        orig = layer_cls.__init__
-
-        def make_patched(original, strip_keys):
-            def patched_init(self, **kwargs):
-                for k in strip_keys:
-                    kwargs.pop(k, None)
-                original(self, **kwargs)
-            return patched_init
-
-        originals[layer_cls] = orig
-        layer_cls.__init__ = make_patched(orig, keys_to_strip)
-
-    return originals
-
-
-def restore_keras_layers(originals):
-    for layer_cls, orig in originals.items():
-        layer_cls.__init__ = orig
-
-
-def load_model_with_patch(path):
-    import keras
-    originals = patch_keras_layers()
+# 🔧 SAFE MODEL LOAD
+def safe_load_model(path):
+    from tensorflow.keras.models import load_model
     try:
-        print("[MODEL] Loading model with compat patches...", flush=True)
-        loaded = keras.models.load_model(path, compile=False)
-        print("[MODEL] Model loaded successfully ✅", flush=True)
-        return loaded
+        print("[MODEL] Trying normal load...", flush=True)
+        return load_model(path, compile=False)
     except Exception as e:
-        print(f"[MODEL] Load failed ❌: {e}", flush=True)
-        return None
-    finally:
-        restore_keras_layers(originals)
+        print("[MODEL] Normal load failed:", e, flush=True)
+
+    try:
+        print("[MODEL] Trying compile=True...", flush=True)
+        return load_model(path)
+    except Exception as e:
+        print("[MODEL] Compile load failed:", e, flush=True)
+
+    return None
 
 
-def ensure_model():
-    global model
-
-    if model is not None:
-        return True
-
-    print("[MODEL] ensure_model() called", flush=True)
+# 🔁 DOWNLOAD MODEL (HF → GDRIVE fallback)
+def download_model():
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+    # Remove corrupted file
+    if MODEL_PATH.exists():
+        size_mb = MODEL_PATH.stat().st_size / 1e6
+        if size_mb < 10:  # corrupted or HTML
+            print("[MODEL] Removing corrupted file...", flush=True)
+            os.remove(MODEL_PATH)
+
+    # Try HuggingFace first
     if not MODEL_PATH.exists():
-        print("[MODEL] Downloading from Hugging Face...", flush=True)
+        print("[MODEL] Trying HuggingFace download...", flush=True)
         try:
             hf_hub_download(
                 repo_id=HF_REPO_ID,
@@ -99,38 +68,70 @@ def ensure_model():
                 local_dir_use_symlinks=False
             )
         except Exception as e:
-            print(f"[MODEL] Download failed ❌: {e}", flush=True)
+            print("[MODEL] HF download failed:", e, flush=True)
+
+    # If still not exists → use Google Drive
+    if not MODEL_PATH.exists():
+        print("[MODEL] Trying Google Drive download...", flush=True)
+        try:
+            gdown.download(GDRIVE_URL, str(MODEL_PATH), quiet=False)
+        except Exception as e:
+            print("[MODEL] GDrive download failed:", e, flush=True)
+
+    # Final check
+    if MODEL_PATH.exists():
+        size_mb = MODEL_PATH.stat().st_size / 1e6
+        print(f"[MODEL] File size: {size_mb:.1f} MB", flush=True)
+
+        if size_mb < 10:
+            print("[MODEL] File still corrupted ❌", flush=True)
             return False
 
-    if not MODEL_PATH.exists():
-        print("[MODEL] File missing after download ❌", flush=True)
+        return True
+
+    return False
+
+
+# 🔁 ENSURE MODEL
+def ensure_model():
+    global model
+
+    if model is not None:
+        return True
+
+    print("[MODEL] ensure_model() called", flush=True)
+
+    if not download_model():
+        print("[MODEL] Download failed ❌", flush=True)
         return False
 
-    size_mb = MODEL_PATH.stat().st_size / 1e6
-    print(f"[MODEL] File size: {size_mb:.1f} MB", flush=True)
+    print("[MODEL] Loading model...", flush=True)
+    loaded = safe_load_model(str(MODEL_PATH))
 
-    loaded = load_model_with_patch(str(MODEL_PATH))
     if loaded is None:
+        print("[MODEL] Load failed ❌", flush=True)
         return False
 
     model = loaded
+    print("[MODEL] Model loaded ✅", flush=True)
     return True
 
 
-# Load label map
+# 📄 LOAD LABEL MAP
 try:
     with open(LABEL_MAP_PATH, "r") as f:
         label_map = json.load(f)
-    print("[LABEL] Label map loaded ✅", flush=True)
+    print("[LABEL] Loaded ✅", flush=True)
 except Exception as e:
-    print(f"[LABEL] Error ❌: {e}", flush=True)
+    print("[LABEL] Error:", e, flush=True)
     label_map = {"idx2species": {}, "idx2health": {}}
 
 species_idx_to_name = {int(k): v for k, v in label_map.get("idx2species", {}).items()}
 health_idx_to_name = {int(k): v for k, v in label_map.get("idx2health", {}).items()}
 
-# Pre-load model at startup
-print("[STARTUP] Pre-loading model...", flush=True)
+
+# 🚀 PRELOAD (optional)
+print("[STARTUP] Preloading model...", flush=True)
 ensure_model()
 
 
@@ -141,23 +142,21 @@ def home():
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "model_loaded": model is not None})
+    return jsonify({"model_loaded": model is not None})
 
 
 @app.route("/image/upload", methods=["POST"])
 def image_upload():
     try:
         if not ensure_model():
-            return jsonify({"error": "Model not loaded. Check server logs."}), 500
+            return jsonify({"error": "Model not loaded"}), 500
 
         if "file" not in request.files:
             return jsonify({"error": "No file uploaded"}), 400
 
         file = request.files["file"]
-        if file.filename == "":
-            return jsonify({"error": "Empty filename"}), 400
 
-        ext = os.path.splitext(file.filename)[1].lower()
+        ext = os.path.splitext(file.filename)[1]
         filename = sha512(uuid.uuid4().hex.encode()).hexdigest() + ext
 
         images_dir = BASE_DIR / "images"
@@ -168,7 +167,7 @@ def image_upload():
 
         img = cv2.imread(str(file_path))
         if img is None:
-            return jsonify({"error": "Could not read image file"}), 400
+            return jsonify({"error": "Invalid image"}), 400
 
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = cv2.resize(img, (256, 256))
@@ -192,7 +191,7 @@ def image_upload():
         })
 
     except Exception as e:
-        print(f"[PREDICT] Error: {e}", flush=True)
+        print("[ERROR]", e, flush=True)
         return jsonify({"error": str(e)}), 500
 
 
