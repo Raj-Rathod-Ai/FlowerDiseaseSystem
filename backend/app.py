@@ -5,9 +5,6 @@ from hashlib import sha512
 import uuid
 import cv2
 import numpy as np
-import keras
-from keras.layers import BatchNormalization
-from keras.models import load_model
 import json
 from flask_cors import CORS
 from huggingface_hub import hf_hub_download
@@ -27,13 +24,36 @@ HF_MODEL_FILENAME = "multitask_finetuned.keras"
 model = None
 
 
-# ✅ Patch BatchNormalization to ignore removed 'renorm' args from older Keras
-class CompatBatchNormalization(BatchNormalization):
-    def __init__(self, **kwargs):
+def load_model_with_patch(path):
+    """
+    Monkey-patch keras.layers.BatchNormalization to strip legacy
+    'renorm' args that were removed in Keras 3, then load the model.
+    """
+    import keras
+    from keras.layers import BatchNormalization
+
+    # Save original __init__
+    _orig_init = BatchNormalization.__init__
+
+    def _patched_init(self, **kwargs):
         kwargs.pop("renorm", None)
         kwargs.pop("renorm_clipping", None)
         kwargs.pop("renorm_momentum", None)
-        super().__init__(**kwargs)
+        _orig_init(self, **kwargs)
+
+    # Apply patch
+    BatchNormalization.__init__ = _patched_init
+    try:
+        print("[MODEL] Loading model...", flush=True)
+        loaded = keras.models.load_model(path, compile=False)
+        print("[MODEL] Model loaded successfully ✅", flush=True)
+        return loaded
+    except Exception as e:
+        print(f"[MODEL] Load failed ❌: {e}", flush=True)
+        return None
+    finally:
+        # Always restore original __init__
+        BatchNormalization.__init__ = _orig_init
 
 
 def ensure_model():
@@ -46,7 +66,7 @@ def ensure_model():
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     if not MODEL_PATH.exists():
-        print(f"[MODEL] Downloading from Hugging Face...", flush=True)
+        print("[MODEL] Downloading from Hugging Face...", flush=True)
         try:
             hf_hub_download(
                 repo_id=HF_REPO_ID,
@@ -65,18 +85,12 @@ def ensure_model():
     size_mb = MODEL_PATH.stat().st_size / 1e6
     print(f"[MODEL] File size: {size_mb:.1f} MB", flush=True)
 
-    try:
-        print("[MODEL] Loading model with compat patch...", flush=True)
-        model = load_model(
-            str(MODEL_PATH),
-            custom_objects={"BatchNormalization": CompatBatchNormalization},
-            compile=False
-        )
-        print("[MODEL] Model loaded successfully ✅", flush=True)
-        return True
-    except Exception as e:
-        print(f"[MODEL] Load failed ❌: {e}", flush=True)
+    loaded = load_model_with_patch(str(MODEL_PATH))
+    if loaded is None:
         return False
+
+    model = loaded
+    return True
 
 
 # Load label map
