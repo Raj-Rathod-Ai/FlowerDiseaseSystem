@@ -15,10 +15,40 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR       = Path(__file__).resolve().parent
 LABEL_MAP_PATH = BASE_DIR / "manifests" / "label_map.json"
+MODEL_DIR      = BASE_DIR / "models"
+MODEL_PATH     = MODEL_DIR / "multitask_finetuned.keras"
+
+HF_REPO_ID       = "rathodraj/flower-disease-models"
+HF_MODEL_FILE    = "multitask_finetuned.keras"   # filename inside the HF repo
 
 model = None
+
+
+def download_model_from_hf():
+    """Download the .keras file from HuggingFace to local disk using huggingface_hub."""
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+
+    if MODEL_PATH.exists() and MODEL_PATH.stat().st_size > 10_000_000:
+        print(f"[MODEL] Already cached locally ({MODEL_PATH.stat().st_size / 1e6:.1f} MB)", flush=True)
+        return True
+
+    print(f"[MODEL] Downloading from HuggingFace repo: {HF_REPO_ID} ...", flush=True)
+    try:
+        from huggingface_hub import hf_hub_download
+        local_path = hf_hub_download(
+            repo_id=HF_REPO_ID,
+            filename=HF_MODEL_FILE,
+            local_dir=str(MODEL_DIR),
+            local_dir_use_symlinks=False,
+        )
+        size_mb = Path(local_path).stat().st_size / 1e6
+        print(f"[MODEL] Downloaded to {local_path} ({size_mb:.1f} MB)", flush=True)
+        return size_mb > 10
+    except Exception as e:
+        print(f"[MODEL] HuggingFace download failed: {e}", flush=True)
+        return False
 
 
 def ensure_model():
@@ -27,14 +57,16 @@ def ensure_model():
     if model is not None:
         return True
 
-    print("[MODEL] Loading from HuggingFace...", flush=True)
+    if not download_model_from_hf():
+        print("[MODEL] Could not download model ❌", flush=True)
+        return False
+
+    print(f"[MODEL] Loading from local path: {MODEL_PATH}", flush=True)
     try:
         import keras
         print(f"[MODEL] Keras version: {keras.__version__}", flush=True)
-
-        # ✅ keras.models.load_model works in both Keras 2 and Keras 3
-        # ✅ hf:// URI is supported in Keras 3 via huggingface_hub
-        model = keras.models.load_model("hf://rathodraj/flower-disease-models")
+        # ✅ Load from local file — no gfile / tensorflow needed
+        model = keras.models.load_model(str(MODEL_PATH), compile=False)
         print("[MODEL] Model loaded ✅", flush=True)
         return True
     except Exception as e:
@@ -67,9 +99,9 @@ def home():
 @app.route("/health")
 def health():
     return jsonify({
-        "model_loaded": model is not None,
+        "model_loaded":    model is not None,
         "species_classes": len(species_idx_to_name),
-        "health_classes":  len(health_idx_to_name)
+        "health_classes":  len(health_idx_to_name),
     })
 
 
@@ -120,10 +152,10 @@ def image_upload():
         health_idx  = int(np.argmax(health_pred,  axis=1)[0])
 
         return jsonify({
-            "species":             species_idx_to_name.get(species_idx, f"unknown (idx={species_idx})"),
-            "species_confidence":  round(float(np.max(species_pred)) * 100, 2),
-            "health":              health_idx_to_name.get(health_idx,  f"unknown (idx={health_idx})"),
-            "health_confidence":   round(float(np.max(health_pred))  * 100, 2),
+            "species":            species_idx_to_name.get(species_idx, f"unknown (idx={species_idx})"),
+            "species_confidence": round(float(np.max(species_pred)) * 100, 2),
+            "health":             health_idx_to_name.get(health_idx,  f"unknown (idx={health_idx})"),
+            "health_confidence":  round(float(np.max(health_pred))  * 100, 2),
         })
 
     except Exception as e:
