@@ -8,7 +8,7 @@ import numpy as np
 from tensorflow.keras.models import load_model
 import json
 from flask_cors import CORS
-import gdown
+from huggingface_hub import hf_hub_download
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
@@ -16,25 +16,15 @@ app = Flask(__name__)
 CORS(app)
 
 BASE_DIR = Path(__file__).resolve().parent
-
 MODEL_PATH = BASE_DIR / "models" / "multitask_finetuned.keras"
 LABEL_MAP_PATH = BASE_DIR / "manifests" / "label_map.json"
 
-# Google Drive File ID from your sharing link
-GDRIVE_FILE_ID = "1ClzyqzqoZBlp7dcNlnX_xBQvUFtt29QL"
+# ✅ Set your Hugging Face repo here
+# Format: "your-hf-username/your-repo-name"
+HF_REPO_ID = "YOUR_HF_USERNAME/flower-disease-models"
+HF_MODEL_FILENAME = "multitask_finetuned.keras"
 
 model = None
-
-
-def safe_load_model(path):
-    try:
-        print(f"[MODEL] Loading from: {path}", flush=True)
-        m = load_model(path, compile=False)
-        print("[MODEL] Load successful ✅", flush=True)
-        return m
-    except Exception as e:
-        print(f"[MODEL] Load failed ❌: {e}", flush=True)
-    return None
 
 
 def ensure_model():
@@ -44,46 +34,37 @@ def ensure_model():
         return True
 
     print("[MODEL] ensure_model() called", flush=True)
-
-    # Create models dir
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    print(f"[MODEL] Models dir: {MODEL_PATH.parent}", flush=True)
 
-    # Download if missing
     if not MODEL_PATH.exists():
-        print(f"[MODEL] File not found at {MODEL_PATH}. Starting download...", flush=True)
+        print(f"[MODEL] Downloading from Hugging Face: {HF_REPO_ID}/{HF_MODEL_FILENAME}", flush=True)
         try:
-            gdown.download(
-                id=GDRIVE_FILE_ID,
-                output=str(MODEL_PATH),
-                quiet=False,
-                fuzzy=True
+            downloaded_path = hf_hub_download(
+                repo_id=HF_REPO_ID,
+                filename=HF_MODEL_FILENAME,
+                local_dir=str(MODEL_PATH.parent),
+                local_dir_use_symlinks=False
             )
+            print(f"[MODEL] Downloaded to: {downloaded_path}", flush=True)
         except Exception as e:
-            print(f"[MODEL] gdown download error ❌: {e}", flush=True)
+            print(f"[MODEL] Download failed ❌: {e}", flush=True)
             return False
-    else:
-        print(f"[MODEL] File already exists: {MODEL_PATH}", flush=True)
 
-    # Verify file
     if not MODEL_PATH.exists():
-        print("[MODEL] File still missing after download ❌", flush=True)
+        print("[MODEL] File missing after download ❌", flush=True)
         return False
 
     size_mb = MODEL_PATH.stat().st_size / 1e6
     print(f"[MODEL] File size: {size_mb:.1f} MB", flush=True)
 
-    if size_mb < 1:
-        print("[MODEL] File too small — download may have failed (got HTML instead of model) ❌", flush=True)
-        MODEL_PATH.unlink()  # delete bad file so next request retries
+    try:
+        print("[MODEL] Loading model...", flush=True)
+        model = load_model(str(MODEL_PATH), compile=False)
+        print("[MODEL] Model loaded successfully ✅", flush=True)
+        return True
+    except Exception as e:
+        print(f"[MODEL] Load failed ❌: {e}", flush=True)
         return False
-
-    loaded = safe_load_model(str(MODEL_PATH))
-    if loaded is None:
-        return False
-
-    model = loaded
-    return True
 
 
 # Load label map at startup
@@ -92,11 +73,15 @@ try:
         label_map = json.load(f)
     print("[LABEL] Label map loaded ✅", flush=True)
 except Exception as e:
-    print(f"[LABEL] Label map load error ❌: {e}", flush=True)
+    print(f"[LABEL] Error ❌: {e}", flush=True)
     label_map = {"idx2species": {}, "idx2health": {}}
 
 species_idx_to_name = {int(k): v for k, v in label_map.get("idx2species", {}).items()}
 health_idx_to_name = {int(k): v for k, v in label_map.get("idx2health", {}).items()}
+
+# 🔥 Pre-load model at startup so it's ready before first request
+print("[STARTUP] Pre-loading model...", flush=True)
+ensure_model()
 
 
 @app.route("/")
@@ -106,9 +91,7 @@ def home():
 
 @app.route("/health")
 def health():
-    """Health check — use this as Render's Health Check Path"""
-    ready = ensure_model()
-    return jsonify({"status": "ok", "model_loaded": ready})
+    return jsonify({"status": "ok", "model_loaded": model is not None})
 
 
 @app.route("/image/upload", methods=["POST"])
