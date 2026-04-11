@@ -5,7 +5,9 @@ from hashlib import sha512
 import uuid
 import cv2
 import numpy as np
-from tensorflow.keras.models import load_model
+import keras
+from keras.layers import BatchNormalization
+from keras.models import load_model
 import json
 from flask_cors import CORS
 from huggingface_hub import hf_hub_download
@@ -19,12 +21,19 @@ BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR / "models" / "multitask_finetuned.keras"
 LABEL_MAP_PATH = BASE_DIR / "manifests" / "label_map.json"
 
-# ✅ Set your Hugging Face repo here
-# Format: "your-hf-username/your-repo-name"
 HF_REPO_ID = "rathodraj/flower-disease-models"
 HF_MODEL_FILENAME = "multitask_finetuned.keras"
 
 model = None
+
+
+# ✅ Patch BatchNormalization to ignore removed 'renorm' args from older Keras
+class CompatBatchNormalization(BatchNormalization):
+    def __init__(self, **kwargs):
+        kwargs.pop("renorm", None)
+        kwargs.pop("renorm_clipping", None)
+        kwargs.pop("renorm_momentum", None)
+        super().__init__(**kwargs)
 
 
 def ensure_model():
@@ -37,15 +46,14 @@ def ensure_model():
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     if not MODEL_PATH.exists():
-        print(f"[MODEL] Downloading from Hugging Face: {HF_REPO_ID}/{HF_MODEL_FILENAME}", flush=True)
+        print(f"[MODEL] Downloading from Hugging Face...", flush=True)
         try:
-            downloaded_path = hf_hub_download(
+            hf_hub_download(
                 repo_id=HF_REPO_ID,
                 filename=HF_MODEL_FILENAME,
                 local_dir=str(MODEL_PATH.parent),
                 local_dir_use_symlinks=False
             )
-            print(f"[MODEL] Downloaded to: {downloaded_path}", flush=True)
         except Exception as e:
             print(f"[MODEL] Download failed ❌: {e}", flush=True)
             return False
@@ -58,8 +66,12 @@ def ensure_model():
     print(f"[MODEL] File size: {size_mb:.1f} MB", flush=True)
 
     try:
-        print("[MODEL] Loading model...", flush=True)
-        model = load_model(str(MODEL_PATH), compile=False)
+        print("[MODEL] Loading model with compat patch...", flush=True)
+        model = load_model(
+            str(MODEL_PATH),
+            custom_objects={"BatchNormalization": CompatBatchNormalization},
+            compile=False
+        )
         print("[MODEL] Model loaded successfully ✅", flush=True)
         return True
     except Exception as e:
@@ -67,7 +79,7 @@ def ensure_model():
         return False
 
 
-# Load label map at startup
+# Load label map
 try:
     with open(LABEL_MAP_PATH, "r") as f:
         label_map = json.load(f)
@@ -79,7 +91,7 @@ except Exception as e:
 species_idx_to_name = {int(k): v for k, v in label_map.get("idx2species", {}).items()}
 health_idx_to_name = {int(k): v for k, v in label_map.get("idx2health", {}).items()}
 
-# 🔥 Pre-load model at startup so it's ready before first request
+# Pre-load model at startup
 print("[STARTUP] Pre-loading model...", flush=True)
 ensure_model()
 
