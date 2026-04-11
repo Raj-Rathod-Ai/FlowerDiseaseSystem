@@ -1,6 +1,6 @@
 import os
 
-# ✅ MUST be set before importing keras — matches how model was saved
+# ✅ MUST be set before ANY keras/jax import
 os.environ["KERAS_BACKEND"] = "jax"
 
 from flask import Flask, request, jsonify
@@ -21,7 +21,6 @@ LABEL_MAP_PATH = BASE_DIR / "manifests" / "label_map.json"
 model = None
 
 
-# ✅ Load model directly from HuggingFace using Keras 3
 def ensure_model():
     global model
 
@@ -31,7 +30,11 @@ def ensure_model():
     print("[MODEL] Loading from HuggingFace...", flush=True)
     try:
         import keras
-        model = keras.saving.load_model("hf://rathodraj/flower-disease-models")
+        print(f"[MODEL] Keras version: {keras.__version__}", flush=True)
+
+        # ✅ keras.models.load_model works in both Keras 2 and Keras 3
+        # ✅ hf:// URI is supported in Keras 3 via huggingface_hub
+        model = keras.models.load_model("hf://rathodraj/flower-disease-models")
         print("[MODEL] Model loaded ✅", flush=True)
         return True
     except Exception as e:
@@ -49,8 +52,7 @@ except Exception as e:
     label_map = {"idx2species": {}, "idx2health": {}}
 
 species_idx_to_name = {int(k): v for k, v in label_map.get("idx2species", {}).items()}
-health_idx_to_name = {int(k): v for k, v in label_map.get("idx2health", {}).items()}
-
+health_idx_to_name  = {int(k): v for k, v in label_map.get("idx2health",  {}).items()}
 
 # 🚀 Preload at startup
 print("[STARTUP] Preloading model...", flush=True)
@@ -67,7 +69,7 @@ def health():
     return jsonify({
         "model_loaded": model is not None,
         "species_classes": len(species_idx_to_name),
-        "health_classes": len(health_idx_to_name)
+        "health_classes":  len(health_idx_to_name)
     })
 
 
@@ -105,24 +107,23 @@ def image_upload():
 
         preds = model.predict(img)
 
-        # Handle dict or list/tuple output
         if isinstance(preds, dict):
             species_pred = np.array(preds.get("species"))
-            health_pred = np.array(preds.get("health"))
+            health_pred  = np.array(preds.get("health"))
         elif isinstance(preds, (list, tuple)) and len(preds) == 2:
             species_pred = np.array(preds[0])
-            health_pred = np.array(preds[1])
+            health_pred  = np.array(preds[1])
         else:
             return jsonify({"error": "Unexpected model output format"}), 500
 
         species_idx = int(np.argmax(species_pred, axis=1)[0])
-        health_idx = int(np.argmax(health_pred, axis=1)[0])
+        health_idx  = int(np.argmax(health_pred,  axis=1)[0])
 
         return jsonify({
-            "species": species_idx_to_name.get(species_idx, f"unknown (idx={species_idx})"),
-            "species_confidence": round(float(np.max(species_pred)) * 100, 2),
-            "health": health_idx_to_name.get(health_idx, f"unknown (idx={health_idx})"),
-            "health_confidence": round(float(np.max(health_pred)) * 100, 2)
+            "species":             species_idx_to_name.get(species_idx, f"unknown (idx={species_idx})"),
+            "species_confidence":  round(float(np.max(species_pred)) * 100, 2),
+            "health":              health_idx_to_name.get(health_idx,  f"unknown (idx={health_idx})"),
+            "health_confidence":   round(float(np.max(health_pred))  * 100, 2),
         })
 
     except Exception as e:
