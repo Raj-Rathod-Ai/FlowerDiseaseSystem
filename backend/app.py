@@ -10,7 +10,7 @@ import json
 from flask_cors import CORS
 import gdown
 
-# 🔴 Hide TensorFlow warnings
+# Hide TensorFlow warnings
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 app = Flask(__name__)
@@ -23,7 +23,8 @@ LABEL_MAP_PATH = BASE_DIR / "manifests/label_map.json"
 
 model = None  # global model
 
-# ✅ SAFE MODEL LOAD FUNCTION
+
+# ✅ SAFE LOAD FUNCTION
 def safe_load_model(path):
     try:
         print("Trying normal load...")
@@ -32,12 +33,11 @@ def safe_load_model(path):
         print("Normal load failed ❌:", e)
 
     try:
-        print("Trying with compile=True...")
+        print("Trying compile=True...")
         return load_model(path)
     except Exception as e:
         print("Compile load failed ❌:", e)
 
-    print("All load attempts failed ❌")
     return None
 
 
@@ -54,7 +54,7 @@ species_idx_to_name = {int(k): v for k, v in label_map.get('idx2species', {}).it
 health_idx_to_name = {int(k): v for k, v in label_map.get('idx2health', {}).items()}
 
 
-# ✅ ENSURE MODEL FUNCTION
+# ✅ ENSURE MODEL FUNCTION (MAIN FIX)
 def ensure_model():
     global model
 
@@ -67,7 +67,7 @@ def ensure_model():
 
     # Download model if not exists
     if not MODEL_PATH.exists():
-        print("Downloading model from Google Drive...")
+        print("Downloading model...")
         try:
             gdown.download(
                 "https://drive.google.com/uc?id=1ClzyqzqoZBlp7dcNlnX_xBQvUFtt29QL",
@@ -78,22 +78,21 @@ def ensure_model():
             print("Download error ❌:", e)
             return False
 
-    print("File exists:", MODEL_PATH.exists())
+    print("Model exists:", MODEL_PATH.exists())
 
     if not MODEL_PATH.exists():
-        print("Model still missing ❌")
         return False
 
     # Load model safely
     print("Loading model...")
-    model_loaded = safe_load_model(str(MODEL_PATH))
+    loaded = safe_load_model(str(MODEL_PATH))
 
-    if model_loaded is None:
+    if loaded is None:
         print("Model load failed ❌")
         return False
 
-    model = model_loaded
-    print("Model loaded successfully ✅")
+    model = loaded
+    print("Model loaded ✅")
     return True
 
 
@@ -105,7 +104,7 @@ def home():
 @app.route("/image/upload", methods=["POST"])
 def image_upload():
     try:
-        # Ensure model
+        # Ensure model loaded
         if not ensure_model():
             return jsonify({"error": "Model not loaded"}), 500
 
@@ -115,9 +114,8 @@ def image_upload():
         file = request.files["file"]
 
         # Save file
-        file_extension = os.path.splitext(file.filename)[1]
-        unique_name = uuid.uuid4().hex
-        filename = sha512(unique_name.encode()).hexdigest() + file_extension
+        ext = os.path.splitext(file.filename)[1]
+        filename = sha512(uuid.uuid4().hex.encode()).hexdigest() + ext
 
         images_dir = BASE_DIR / "images"
         images_dir.mkdir(exist_ok=True)
@@ -158,7 +156,7 @@ def image_upload():
         return jsonify({"error": str(e)}), 500
 
 
-# ✅ Dynamic port (Railway / Render)
+# Dynamic port for Railway / Render
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
