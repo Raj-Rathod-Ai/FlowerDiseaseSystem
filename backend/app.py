@@ -20,45 +20,39 @@ BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR / "models" / "multitask_finetuned.keras"
 LABEL_MAP_PATH = BASE_DIR / "manifests" / "label_map.json"
 
-# Google Drive file ID for multitask_finetuned.keras
-# Get this from your sharing link: drive.google.com/file/d/<FILE_ID>/view
+# Google Drive File ID from your sharing link
 GDRIVE_FILE_ID = "1ClzyqzqoZBlp7dcNlnX_xBQvUFtt29QL"
 
 model = None
 
 
 def safe_load_model(path):
-    """Try loading model with compile=False first, then fallback."""
     try:
-        print("Loading model (compile=False)...")
-        return load_model(path, compile=False)
+        print(f"[MODEL] Loading from: {path}", flush=True)
+        m = load_model(path, compile=False)
+        print("[MODEL] Load successful ✅", flush=True)
+        return m
     except Exception as e:
-        print(f"Load with compile=False failed: {e}")
-
-    try:
-        print("Loading model (compile=True)...")
-        return load_model(path)
-    except Exception as e:
-        print(f"Load with compile=True failed: {e}")
-
+        print(f"[MODEL] Load failed ❌: {e}", flush=True)
     return None
 
 
 def ensure_model():
-    """Download model from Google Drive if missing, then load it."""
     global model
 
     if model is not None:
         return True
 
-    # Create models directory if it doesn't exist
-    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    print("[MODEL] ensure_model() called", flush=True)
 
-    # Download model if file is missing
+    # Create models dir
+    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    print(f"[MODEL] Models dir: {MODEL_PATH.parent}", flush=True)
+
+    # Download if missing
     if not MODEL_PATH.exists():
-        print("Model file not found. Downloading from Google Drive...")
+        print(f"[MODEL] File not found at {MODEL_PATH}. Starting download...", flush=True)
         try:
-            # Use id= parameter — avoids virus-scan redirect issues with large files
             gdown.download(
                 id=GDRIVE_FILE_ID,
                 output=str(MODEL_PATH),
@@ -66,22 +60,29 @@ def ensure_model():
                 fuzzy=True
             )
         except Exception as e:
-            print(f"Download failed: {e}")
+            print(f"[MODEL] gdown download error ❌: {e}", flush=True)
             return False
+    else:
+        print(f"[MODEL] File already exists: {MODEL_PATH}", flush=True)
 
+    # Verify file
     if not MODEL_PATH.exists():
-        print("Model file still missing after download attempt.")
+        print("[MODEL] File still missing after download ❌", flush=True)
         return False
 
-    print(f"Model file size: {MODEL_PATH.stat().st_size / 1e6:.1f} MB")
+    size_mb = MODEL_PATH.stat().st_size / 1e6
+    print(f"[MODEL] File size: {size_mb:.1f} MB", flush=True)
+
+    if size_mb < 1:
+        print("[MODEL] File too small — download may have failed (got HTML instead of model) ❌", flush=True)
+        MODEL_PATH.unlink()  # delete bad file so next request retries
+        return False
 
     loaded = safe_load_model(str(MODEL_PATH))
     if loaded is None:
-        print("Model failed to load.")
         return False
 
     model = loaded
-    print("Model loaded successfully.")
     return True
 
 
@@ -89,9 +90,9 @@ def ensure_model():
 try:
     with open(LABEL_MAP_PATH, "r") as f:
         label_map = json.load(f)
-    print("Label map loaded.")
+    print("[LABEL] Label map loaded ✅", flush=True)
 except Exception as e:
-    print(f"Label map load error: {e}")
+    print(f"[LABEL] Label map load error ❌: {e}", flush=True)
     label_map = {"idx2species": {}, "idx2health": {}}
 
 species_idx_to_name = {int(k): v for k, v in label_map.get("idx2species", {}).items()}
@@ -105,7 +106,7 @@ def home():
 
 @app.route("/health")
 def health():
-    """Health check endpoint — also warms up the model."""
+    """Health check — use this as Render's Health Check Path"""
     ready = ensure_model()
     return jsonify({"status": "ok", "model_loaded": ready})
 
@@ -123,7 +124,6 @@ def image_upload():
         if file.filename == "":
             return jsonify({"error": "Empty filename"}), 400
 
-        # Save uploaded file
         ext = os.path.splitext(file.filename)[1].lower()
         filename = sha512(uuid.uuid4().hex.encode()).hexdigest() + ext
 
@@ -133,17 +133,15 @@ def image_upload():
         file_path = images_dir / filename
         file.save(str(file_path))
 
-        # Read and preprocess image
         img = cv2.imread(str(file_path))
         if img is None:
-            return jsonify({"error": "Could not read image. Make sure it is a valid image file."}), 400
+            return jsonify({"error": "Could not read image file"}), 400
 
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = cv2.resize(img, (256, 256))
         img = img.astype(np.float32) / 255.0
         img = np.expand_dims(img, axis=0)
 
-        # Run prediction
         preds = model.predict(img)
 
         if isinstance(preds, dict):
@@ -161,7 +159,7 @@ def image_upload():
         })
 
     except Exception as e:
-        print(f"Prediction error: {e}")
+        print(f"[PREDICT] Error: {e}", flush=True)
         return jsonify({"error": str(e)}), 500
 
 
