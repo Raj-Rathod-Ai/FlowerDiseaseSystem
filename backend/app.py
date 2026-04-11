@@ -23,28 +23,53 @@ HF_MODEL_FILENAME = "multitask_finetuned.keras"
 
 model = None
 
+# Keys to strip from layer configs that were added in newer Keras
+# but don't exist in the installed Keras 3.x version
+LEGACY_KEYS = {
+    "keras.layers.BatchNormalization": ["renorm", "renorm_clipping", "renorm_momentum"],
+    "keras.layers.Dense": ["quantization_config"],
+}
 
-def load_model_with_patch(path):
+
+def patch_keras_layers():
     """
-    Monkey-patch keras.layers.BatchNormalization to strip legacy
-    'renorm' args that were removed in Keras 3, then load the model.
+    Monkey-patch Keras layer __init__ methods to silently drop
+    config keys that don't exist in the installed Keras version.
     """
     import keras
-    from keras.layers import BatchNormalization
 
-    # Save original __init__
-    _orig_init = BatchNormalization.__init__
+    patches = [
+        (keras.layers.BatchNormalization, ["renorm", "renorm_clipping", "renorm_momentum"]),
+        (keras.layers.Dense, ["quantization_config"]),
+    ]
 
-    def _patched_init(self, **kwargs):
-        kwargs.pop("renorm", None)
-        kwargs.pop("renorm_clipping", None)
-        kwargs.pop("renorm_momentum", None)
-        _orig_init(self, **kwargs)
+    originals = {}
+    for layer_cls, keys_to_strip in patches:
+        orig = layer_cls.__init__
 
-    # Apply patch
-    BatchNormalization.__init__ = _patched_init
+        def make_patched(original, strip_keys):
+            def patched_init(self, **kwargs):
+                for k in strip_keys:
+                    kwargs.pop(k, None)
+                original(self, **kwargs)
+            return patched_init
+
+        originals[layer_cls] = orig
+        layer_cls.__init__ = make_patched(orig, keys_to_strip)
+
+    return originals
+
+
+def restore_keras_layers(originals):
+    for layer_cls, orig in originals.items():
+        layer_cls.__init__ = orig
+
+
+def load_model_with_patch(path):
+    import keras
+    originals = patch_keras_layers()
     try:
-        print("[MODEL] Loading model...", flush=True)
+        print("[MODEL] Loading model with compat patches...", flush=True)
         loaded = keras.models.load_model(path, compile=False)
         print("[MODEL] Model loaded successfully ✅", flush=True)
         return loaded
@@ -52,8 +77,7 @@ def load_model_with_patch(path):
         print(f"[MODEL] Load failed ❌: {e}", flush=True)
         return None
     finally:
-        # Always restore original __init__
-        BatchNormalization.__init__ = _orig_init
+        restore_keras_layers(originals)
 
 
 def ensure_model():
