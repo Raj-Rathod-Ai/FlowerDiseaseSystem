@@ -1,192 +1,252 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import "./Services.css";
 
-function Service() {
-  const [selectedFile, setSelectedFile] = useState();
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [predictedFlowerDisease, setPredictedFlowerDisease] = useState("");
-  const [predictedFlower, setPredictedFlower] = useState("");
-  const [imageSrc, setImageSrc] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
+const API_URL = "https://flowerdiseasesystem.onrender.com";
 
-  const changeHandler = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+const FLOWER_EMOJIS = { rose: "🌹", lily: "🌷", sunflower: "🌻" };
+const HEALTH_CONFIG = {
+  healthy:  { emoji: "✅", color: "#4caf50", label: "Healthy" },
+  diseased: { emoji: "⚠️", color: "#f44336", label: "Diseased" },
+};
 
-    setSelectedFile(file);
-    setErrorMessage("");
-    setIsSubmitted(false);
-    setIsLoading(false);
-
-    const reader = new FileReader();
-    reader.onload = function (event) {
-      setImageSrc(event.target.result);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleSubmission = () => {
-    if (!selectedFile) {
-      setErrorMessage("Please upload an image before submitting.");
-      return;
-    }
-
-    setErrorMessage("");
-    setIsLoading(true);
-    setIsSubmitted(false);
-
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-
-    const API_URL = "https://flowerdiseasesystem.onrender.com";
-
-    fetch(`${API_URL}/image/upload`, {
-      method: "POST",
-      body: formData,
-    })
-      .then((response) => response.json())
-      .then((result) => {
-        setIsLoading(false);
-        if (result.error) {
-          setErrorMessage(result.error);
-          setIsSubmitted(false);
-          return;
-        }
-
-        console.log("Success:", result);
-        setPredictedFlower(result.species || "Unknown flower");
-        setPredictedFlowerDisease(result.health || "Unknown health status");
-        setErrorMessage("");
-        setIsSubmitted(true);
-      })
-      .catch((error) => {
-        console.error("Error React:", error);
-        setErrorMessage("Unable to process image. Please try again.");
-        setIsSubmitted(false);
-        setIsLoading(false);
-      });
-  };
-
+function ConfidenceBar({ label, value, color }) {
   return (
-    <>
-      <div className="service component__space" id="Services">
-        <div className="heading">
-          <h1 className="heading">Our Service</h1>
-          <p className="heading p__color">Detect the Flower and Disease it has</p>
-          <p className="heading p__color"></p>
-        </div>
-
-        <div className="container">
-          <div className="row">
-            {imageSrc && (
-              <img src={imageSrc} alt="Uploaded preview" className="flower" />
-            )}
-            <div className="col__3">
-              <input
-                type="file"
-                name="File"
-                id="fileUp"
-                hidden
-                onChange={changeHandler}
-              />
-              <label htmlFor="fileUp">
-                <div className="service__box pointer">
-                  <div className="icon">
-                    <svg
-                      stroke="currentColor"
-                      fill="none"
-                      strokeWidth="2"
-                      viewBox="0 0 24 24"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      height="1em"
-                      width="1em"
-                      align="center"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-                      <polyline points="2 17 12 22 22 17"></polyline>
-                      <polyline points="2 12 12 17 22 12"></polyline>
-                    </svg>
-                  </div>
-                  <div className="service__meta">
-                    <h1 className="service__text">Upload Image</h1>
-                    <p className="p service__text p__color">
-                      Upload the Image of the Flower that has
-                    </p>
-                    <p className="p service__text p__color">
-                      to be Tested for Detection.
-                    </p>
-                  </div>
-                </div>
-              </label>
-              <button
-                onClick={handleSubmission}
-                disabled={!selectedFile || isLoading}
-                style={{
-                  fontSize: 20,
-                  backgroundColor: selectedFile && !isLoading ? "#f9004d" : "#ccc",
-                  color: selectedFile && !isLoading ? "#ffffff" : "#666",
-                  padding: "15px 32px",
-                  margin: 0,
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: selectedFile && !isLoading ? "pointer" : "not-allowed",
-                }}
-              >
-                {isLoading ? "Analyzing..." : "Submit"}
-              </button>
-              {isLoading && (
-                <div className="analysis__box">
-                  <div className="loader-ring" />
-                  <p className="analysis__card">Checking the image and analyzing flower health...</p>
-                </div>
-              )}
-              {errorMessage && (
-                <p style={{ color: "#ffcccb", textAlign: "center", marginTop: 16 }}>
-                  {errorMessage}
-                </p>
-              )}
-              {isSubmitted && !errorMessage && !isLoading ? (
-                <div className="prediction__card">
-                  <h1
-                    style={{
-                      textAlign: "center",
-                      paddingTop: 20,
-                      fontSize: 30,
-                    }}
-                  >
-                    Prediction
-                  </h1>
-                  <div
-                    style={{
-                      textAlign: "left",
-                      padding: "20px 24px",
-                      backgroundColor: "rgba(249, 0, 77, 0.12)",
-                      borderRadius: "14px",
-                      color: "#f3f9f1",
-                      marginTop: 16,
-                    }}
-                  >
-                    <p style={{ fontSize: 20, margin: "10px 0" }}>
-                      Flower Name :- <strong>{predictedFlower}</strong>
-                    </p>
-                    <p style={{ fontSize: 20, margin: "10px 0" }}>
-                      Disease Status :- <strong>{predictedFlowerDisease}</strong>
-                    </p>
-                  </div>
-                </div>
-              ) : null}
-              {/* </div> */}
-            </div>
-          </div>
-        </div>
+    <div className="conf__bar__wrap">
+      <div className="conf__bar__label">
+        <span>{label}</span>
+        <span style={{ color }}>{value}%</span>
       </div>
-    </>
-
+      <div className="conf__bar__bg">
+        <div
+          className="conf__bar__fill"
+          style={{ width: `${value}%`, background: color }}
+        />
+      </div>
+    </div>
   );
 }
 
+function Service() {
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [imageSrc, setImageSrc]         = useState("");
+  const [isDragging, setIsDragging]     = useState(false);
+  const [isLoading, setIsLoading]       = useState(false);
+  const [result, setResult]             = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const fileInputRef = useRef(null);
+
+  const processFile = (file) => {
+    if (!file || !file.type.startsWith("image/")) {
+      setErrorMessage("Please upload a valid image file (jpg, png, webp).");
+      return;
+    }
+    setSelectedFile(file);
+    setErrorMessage("");
+    setResult(null);
+    const reader = new FileReader();
+    reader.onload = (e) => setImageSrc(e.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const changeHandler = (e) => processFile(e.target.files[0]);
+
+  const onDrop = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    processFile(e.dataTransfer.files[0]);
+  }, []);
+
+  const onDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
+  const onDragLeave = () => setIsDragging(false);
+
+  const handleSubmission = async () => {
+    if (!selectedFile) { setErrorMessage("Please upload an image first."); return; }
+    setErrorMessage("");
+    setIsLoading(true);
+    setResult(null);
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    try {
+      const response = await fetch(`${API_URL}/image/upload`, { method: "POST", body: formData });
+      const data = await response.json();
+      if (data.error) { setErrorMessage(data.error); }
+      else { setResult(data); }
+    } catch (err) {
+      setErrorMessage("Network error. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleReset = () => {
+    setSelectedFile(null);
+    setImageSrc("");
+    setResult(null);
+    setErrorMessage("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const healthCfg = result ? (HEALTH_CONFIG[result.health] || { emoji: "❓", color: "#aaa", label: result.health }) : null;
+
+  return (
+    <div className="service component__space" id="Services">
+      <div className="heading">
+        <h1 className="heading">Flower Disease Detection</h1>
+        <p className="heading p__color">Upload a flower image to identify species and detect disease instantly</p>
+      </div>
+
+      <div className="container">
+        <div className="detect__grid">
+
+          {/* LEFT — Upload panel */}
+          <div className="upload__panel">
+            {/* Drop zone */}
+            <div
+              className={`drop__zone ${isDragging ? "dragging" : ""} ${selectedFile ? "has__file" : ""}`}
+              onDrop={onDrop}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={changeHandler}
+              />
+              {imageSrc ? (
+                <div className="preview__wrap">
+                  <img src={imageSrc} alt="Preview" className="preview__img" />
+                  <div className="preview__overlay">
+                    <span>Click to change</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="drop__content">
+                  <div className="drop__icon">🌸</div>
+                  <p className="drop__title">Drag & drop your image here</p>
+                  <p className="drop__sub">or click to browse</p>
+                  <p className="drop__hint">Supports JPG, PNG, WEBP</p>
+                </div>
+              )}
+            </div>
+
+            {/* Action buttons */}
+            <div className="btn__row">
+              <button
+                className="btn__detect"
+                onClick={handleSubmission}
+                disabled={!selectedFile || isLoading}
+              >
+                {isLoading ? (
+                  <><span className="btn__spinner" /> Analyzing...</>
+                ) : (
+                  <><span>🔍</span> Analyze Flower</>
+                )}
+              </button>
+              {selectedFile && (
+                <button className="btn__reset" onClick={handleReset}>
+                  ✕ Reset
+                </button>
+              )}
+            </div>
+
+            {/* Loading state */}
+            {isLoading && (
+              <div className="analysis__box">
+                <div className="loader-ring" />
+                <p className="analysis__card">Analyzing flower health with AI...</p>
+                <p className="analysis__sub">This may take a few seconds</p>
+              </div>
+            )}
+
+            {/* Error */}
+            {errorMessage && (
+              <div className="error__box">
+                <span>⚠️</span> {errorMessage}
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT — Results panel */}
+          <div className="results__panel">
+            {!result && !isLoading && (
+              <div className="results__placeholder">
+                <div className="placeholder__icon">🌿</div>
+                <p>Your analysis results will appear here</p>
+                <p className="placeholder__sub">Upload an image and click Analyze</p>
+              </div>
+            )}
+
+            {result && (
+              <div className="result__card">
+                <h2 className="result__title">Analysis Complete</h2>
+
+                {/* Species */}
+                <div className="result__section">
+                  <div className="result__header">
+                    <span className="result__emoji">{FLOWER_EMOJIS[result.species] || "🌸"}</span>
+                    <div>
+                      <p className="result__label">Flower Species</p>
+                      <p className="result__value" style={{ textTransform: "capitalize" }}>
+                        {result.species}
+                      </p>
+                    </div>
+                    <span className="result__conf">{result.species_confidence}%</span>
+                  </div>
+                  {result.species_all && Object.entries(result.species_all).map(([name, val]) => (
+                    <ConfidenceBar
+                      key={name}
+                      label={name.charAt(0).toUpperCase() + name.slice(1)}
+                      value={val}
+                      color={name === result.species ? "#6ec26e" : "#4a4a4a"}
+                    />
+                  ))}
+                </div>
+
+                {/* Divider */}
+                <div className="result__divider" />
+
+                {/* Health */}
+                <div className="result__section">
+                  <div className="result__header">
+                    <span className="result__emoji">{healthCfg.emoji}</span>
+                    <div>
+                      <p className="result__label">Health Status</p>
+                      <p className="result__value" style={{ color: healthCfg.color }}>
+                        {healthCfg.label}
+                      </p>
+                    </div>
+                    <span className="result__conf" style={{ color: healthCfg.color }}>
+                      {result.health_confidence}%
+                    </span>
+                  </div>
+                  {result.health_all && Object.entries(result.health_all).map(([name, val]) => (
+                    <ConfidenceBar
+                      key={name}
+                      label={name.charAt(0).toUpperCase() + name.slice(1)}
+                      value={val}
+                      color={name === "healthy" ? "#4caf50" : name === "diseased" ? "#f44336" : "#aaa"}
+                    />
+                  ))}
+                </div>
+
+                {/* Advice */}
+                <div className={`advice__box ${result.health === "healthy" ? "advice__healthy" : "advice__diseased"}`}>
+                  {result.health === "healthy" ? (
+                    <p>✅ Your flower appears healthy! Keep up with regular watering and good drainage.</p>
+                  ) : (
+                    <p>⚠️ Disease detected. Consider removing affected leaves, improving air circulation, and consulting a plant specialist.</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default Service;
