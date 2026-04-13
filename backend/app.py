@@ -1,16 +1,18 @@
 import os
 
-# ✅ MUST be set before ANY keras/jax import
-os.environ["KERAS_BACKEND"] = "jax"
+# MUST be set before any keras import — use TensorFlow backend
+# The model was saved with Keras 3.3.3 + TF backend; JAX backend causes get_tensor() errors
+os.environ["KERAS_BACKEND"] = "tensorflow"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from pathlib import Path
 from hashlib import sha512
 import uuid
 import cv2
 import numpy as np
 import json
-from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
@@ -26,13 +28,11 @@ HF_MODEL_FILE = "multitask_finetuned.keras"
 model = None
 
 
-def download_model_from_hf():
+def download_model():
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
-
     if MODEL_PATH.exists() and MODEL_PATH.stat().st_size > 10_000_000:
         print(f"[MODEL] Already cached ({MODEL_PATH.stat().st_size / 1e6:.1f} MB)", flush=True)
         return True
-
     print("[MODEL] Downloading from HuggingFace...", flush=True)
     try:
         from huggingface_hub import hf_hub_download
@@ -52,45 +52,27 @@ def download_model_from_hf():
 
 def ensure_model():
     global model
-
     if model is not None:
         return True
-
-    if not download_model_from_hf():
+    if not download_model():
         return False
-
-    print(f"[MODEL] Loading from {MODEL_PATH}...", flush=True)
+    print(f"[MODEL] Loading...", flush=True)
     try:
         import keras
-        print(f"[MODEL] Keras version: {keras.__version__}", flush=True)
-
-        # ✅ FIX: Patch BatchNormalization to silently drop renorm args
-        # This handles models saved with older Keras that had renorm support
-        from keras.layers import BatchNormalization as _BN
-        _orig_init = _BN.__init__
-
-        def _patched_init(self, *args, **kwargs):
-            kwargs.pop("renorm", None)
-            kwargs.pop("renorm_clipping", None)
-            kwargs.pop("renorm_momentum", None)
-            _orig_init(self, *args, **kwargs)
-
-        _BN.__init__ = _patched_init
-
+        print(f"[MODEL] Keras {keras.__version__} | Backend: {keras.backend.backend()}", flush=True)
         model = keras.models.load_model(str(MODEL_PATH), compile=False)
-        print("[MODEL] Model loaded ✅", flush=True)
+        print("[MODEL] Loaded successfully ✅", flush=True)
         return True
-
     except Exception as e:
         print(f"[MODEL] Load failed ❌: {e}", flush=True)
         return False
 
 
-# 📄 Load label map
+# Load label map
 try:
     with open(LABEL_MAP_PATH, "r") as f:
         label_map = json.load(f)
-    print("[LABEL] Loaded ✅", flush=True)
+    print("[LABEL] Label map loaded ✅", flush=True)
 except Exception as e:
     print(f"[LABEL] Error: {e}", flush=True)
     label_map = {"idx2species": {}, "idx2health": {}}
@@ -98,22 +80,23 @@ except Exception as e:
 species_idx_to_name = {int(k): v for k, v in label_map.get("idx2species", {}).items()}
 health_idx_to_name  = {int(k): v for k, v in label_map.get("idx2health",  {}).items()}
 
-# 🚀 Preload at startup
-print("[STARTUP] Preloading model...", flush=True)
+# Pre-load at startup
+print("[STARTUP] Pre-loading model...", flush=True)
 ensure_model()
 
 
 @app.route("/")
 def home():
-    return "Backend Running ✅"
+    return "FloraScan Backend Running ✅"
 
 
 @app.route("/health")
 def health():
     return jsonify({
+        "status": "ok",
         "model_loaded":    model is not None,
-        "species_classes": len(species_idx_to_name),
-        "health_classes":  len(health_idx_to_name),
+        "species_classes": list(species_idx_to_name.values()),
+        "health_classes":  list(health_idx_to_name.values()),
     })
 
 
@@ -132,9 +115,9 @@ def image_upload():
 
         ext = os.path.splitext(file.filename)[1].lower()
         if ext not in [".jpg", ".jpeg", ".png", ".webp", ".bmp"]:
-            return jsonify({"error": f"Unsupported file type: {ext}"}), 400
+            return jsonify({"error": f"Unsupported file type: {ext}. Use jpg/png/webp."}), 400
 
-        filename = sha512(uuid.uuid4().hex.encode()).hexdigest() + ext
+        filename  = sha512(uuid.uuid4().hex.encode()).hexdigest() + ext
         images_dir = BASE_DIR / "images"
         images_dir.mkdir(exist_ok=True)
         file_path = images_dir / filename
@@ -149,7 +132,7 @@ def image_upload():
         img = img.astype(np.float32) / 255.0
         img = np.expand_dims(img, axis=0)
 
-        preds = model.predict(img)
+        preds = model.predict(img, verbose=0)
 
         if isinstance(preds, dict):
             species_pred = np.array(preds.get("species"))
@@ -163,15 +146,28 @@ def image_upload():
         species_idx = int(np.argmax(species_pred, axis=1)[0])
         health_idx  = int(np.argmax(health_pred,  axis=1)[0])
 
+        # Build all class probabilities
+        all_species = {
+            species_idx_to_name.get(i, f"class_{i}"): round(float(species_pred[0][i]) * 100, 1)
+            for i in range(len(species_pred[0]))
+        }
+        all_health = {
+            health_idx_to_name.get(i, f"class_{i}"): round(float(health_pred[0][i]) * 100, 1)
+            for i in range(len(health_pred[0]))
+        }
+
         return jsonify({
-            "species":            species_idx_to_name.get(species_idx, f"unknown (idx={species_idx})"),
-            "species_confidence": round(float(np.max(species_pred)) * 100, 2),
-            "health":             health_idx_to_name.get(health_idx,  f"unknown (idx={health_idx})"),
-            "health_confidence":  round(float(np.max(health_pred))  * 100, 2),
+            "species":              species_idx_to_name.get(species_idx, f"unknown"),
+            "species_confidence":   round(float(np.max(species_pred)) * 100, 1),
+            "species_all":          all_species,
+            "health":               health_idx_to_name.get(health_idx, f"unknown"),
+            "health_confidence":    round(float(np.max(health_pred))  * 100, 1),
+            "health_all":           all_health,
         })
 
     except Exception as e:
         print(f"[ERROR] {e}", flush=True)
+        import traceback; traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
