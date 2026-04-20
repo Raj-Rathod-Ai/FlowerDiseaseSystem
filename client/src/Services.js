@@ -42,13 +42,18 @@ function getRandomSuggestion(isHealthy) {
 const uploadImage = async (file) => {
   const formData = new FormData();
   formData.append("file", file);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000); // 120s timeout
 
   for (let attempt = 1; attempt <= MAX_UPLOAD_ATTEMPTS; attempt += 1) {
     try {
       const res = await fetch(`${API_URL}/image/upload`, {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeout);
 
       if (!res.ok) {
         const errorText = await res.text();
@@ -60,11 +65,15 @@ const uploadImage = async (file) => {
       if (attempt === MAX_UPLOAD_ATTEMPTS) {
         throw err;
       }
+      if (err.name === "AbortError") {
+        throw new Error("Server timeout: the request took too long.");
+      }
       console.log("Retrying upload...", attempt, err.message);
       await new Promise((resolve) => setTimeout(resolve, 5000));
     }
   }
 
+  clearTimeout(timeout);
   throw new Error("Server not responding");
 };
 

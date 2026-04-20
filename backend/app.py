@@ -169,8 +169,8 @@ def temperature_scale(logits, temperature=2.5):
 
 # ── Startup pre-load ─────────────────────────────────────────────────────────
 
-print("[STARTUP] Model will be loaded on first request ...", flush=True)
-# ensure_model()  # Removed: load on first request instead
+print("[STARTUP] Loading model at startup...", flush=True)
+ensure_model()
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
