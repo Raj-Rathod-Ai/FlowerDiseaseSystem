@@ -1,5 +1,4 @@
-# Ignore backend model binaries and runtime artifacts
-backend/models/
+
 
 # Ignore local Python virtual environments
 venv/
