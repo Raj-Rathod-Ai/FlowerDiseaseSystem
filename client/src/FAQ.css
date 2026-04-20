@@ -1,0 +1,123 @@
+/* ── FAQ Section ── */
+.faq {
+    padding: 80px 0;
+    background: radial-gradient(circle at top right, rgba(54, 221, 164, 0.14), transparent 28%), linear-gradient(135deg, #041211 0%, #112f26 100%);
+    color: #f3f9f1;
+    min-height: 100vh;
+}
+
+.faq .heading {
+    text-align: center;
+    margin-bottom: 60px;
+}
+
+.faq .heading p {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* ── FAQ Grid ── */
+.faq__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+    gap: 30px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+    .faq__grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+}
+
+/* ── FAQ Item ── */
+.faq__item {
+    background: rgba(6, 22, 16, 0.94);
+    border: 1px solid rgba(52, 204, 146, 0.18);
+    border-radius: 20px;
+    padding: 28px;
+    transition: all 0.4s ease;
+    cursor: pointer;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(12px);
+}
+
+.faq__item:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.26);
+    border-color: rgba(52, 204, 146, 0.32);
+}
+
+/* ── FAQ Question ── */
+.faq__question {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.faq__icon {
+    font-size: 24px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: #28e3a1;
+    transition: transform 0.3s ease, color 0.3s ease;
+}
+
+.faq__question h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #f3f9f1;
+    margin: 0;
+    line-height: 1.4;
+    transition: color 0.3s ease;
+}
+
+.faq__question:hover h3 {
+    color: #7ce4a0;
+}
+
+/* ── FAQ Answer ── */
+.faq__answer {
+    margin-left: 36px;
+}
+
+.faq__answer p {
+    font-size: 16px;
+    line-height: 1.7;
+    color: #cde8d0;
+    margin: 0;
+}
+
+/* ── Responsive Design ── */
+@media (max-width: 480px) {
+    .faq {
+        padding: 60px 0;
+    }
+
+    .faq__item {
+        padding: 20px;
+    }
+
+    .faq__question {
+        gap: 10px;
+    }
+
+    .faq__icon {
+        font-size: 20px;
+    }
+
+    .faq__question h3 {
+        font-size: 16px;
+    }
+
+    .faq__answer {
+        margin-left: 30px;
+    }
+
+    .faq__answer p {
+        font-size: 14px;
+    }
+}

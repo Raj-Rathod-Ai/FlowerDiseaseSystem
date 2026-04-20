@@ -1,0 +1,226 @@
+/* ── Footer wrapper ── */
+.footer {
+  position: relative;
+  background: radial-gradient(circle at bottom center, rgba(54, 221, 164, 0.12), transparent 40%), linear-gradient(135deg, #041211 0%, #0a1a0d 100%);
+  color: #cde8d0;
+  font-family: 'Poppins', sans-serif;
+  border-top: 1px solid rgba(52, 204, 146, 0.16);
+}
+
+/* Wave top divider */
+.footer__wave {
+  line-height: 0;
+  overflow: hidden;
+}
+
+.footer__wave svg {
+  display: block;
+  width: 100%;
+  height: 80px;
+}
+
+.footer__body {
+  padding: 60px 0 0;
+}
+
+/* ── Grid layout ── */
+.footer__grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 40px;
+  padding-bottom: 48px;
+}
+
+@media (max-width: 900px) {
+  .footer__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 540px) {
+  .footer__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Brand column ── */
+.footer__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.footer__logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  object-fit: cover;
+  opacity: 0.9;
+  box-shadow: 0 0 20px rgba(40, 227, 161, 0.2);
+}
+
+.footer__brand__name {
+  font-size: 22px;
+  font-weight: 700;
+  color: #f3f9f1;
+  letter-spacing: 0.5px;
+  text-shadow: 0 0 10px rgba(40, 227, 161, 0.3);
+}
+
+.footer__tagline {
+  font-size: 14px;
+  color: #bce5c3;
+  line-height: 1.7;
+  margin-bottom: 24px;
+  max-width: 280px;
+}
+
+/* Social icons */
+.footer__socials {
+  display: flex;
+  gap: 12px;
+}
+
+.footer__social__link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(6, 22, 16, 0.8);
+  border: 1px solid rgba(52, 204, 146, 0.2);
+  color: #7ce4a0;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  backdrop-filter: blur(8px);
+}
+
+.footer__social__link:hover {
+  background: rgba(52, 204, 146, 0.16);
+  border-color: #28e3a1;
+  color: #28e3a1;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(40, 227, 161, 0.24);
+}
+
+/* ── Link columns ── */
+.footer__col__heading {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #7ce4a0;
+  margin-bottom: 20px;
+  text-shadow: 0 0 8px rgba(40, 227, 161, 0.2);
+}
+
+.footer__link__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.footer__link {
+  font-size: 14px;
+  color: #9adcb8;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  display: inline-block;
+}
+
+.footer__link:hover {
+  color: #f3f9f1;
+  padding-left: 6px;
+  text-shadow: 0 0 6px rgba(40, 227, 161, 0.3);
+}
+
+/* Info items (non-link) */
+.footer__info__item {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #9adcb8;
+}
+
+.footer__info__item svg {
+  flex-shrink: 0;
+  opacity: 0.8;
+  color: #28e3a1;
+}
+
+/* ── Divider ── */
+.footer__divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(52, 204, 146, 0.2), transparent);
+}
+
+/* ── Bottom bar ── */
+.footer__bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 22px 0 28px;
+}
+
+.footer__copyright {
+  font-size: 14px;
+  color: #9adcb8;
+  margin: 0;
+}
+
+.footer__copyright strong {
+  color: #7ce4a0;
+  font-weight: 600;
+}
+
+.footer__bottom__links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.footer__bottom__link {
+  font-size: 13px;
+  color: #7ce4a0;
+  text-decoration: none;
+  transition: color 0.25s;
+}
+
+.footer__bottom__link:hover {
+  color: #f3f9f1;
+}
+
+.footer__dot {
+  color: #4ad5af;
+  font-size: 13px;
+}
+
+.footer__powered {
+  font-size: 13px;
+  color: #9adcb8;
+  margin: 0;
+}
+
+.footer__powered__highlight {
+  color: #28e3a1;
+  font-weight: 600;
+  display: inline !important;
+  text-shadow: 0 0 6px rgba(40, 227, 161, 0.2);
+}
+
+@media (max-width: 640px) {
+  .footer__bottom {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "species2idx": {
+    "lily": 0,
+    "rose": 1,
+    "sunflower": 2
+  },
+  "idx2species": {
+    "0": "lily",
+    "1": "rose",
+    "2": "sunflower"
+  },
+  "health2idx": {
+    "healthy": 0,
+    "diseased": 1
+  },
+  "idx2health": {
+    "0": "healthy",
+    "1": "diseased"
+  }
+}
