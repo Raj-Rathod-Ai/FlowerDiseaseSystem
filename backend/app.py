@@ -33,8 +33,9 @@ MODEL_PATH = MODEL_DIR / "multitask_finetuned.keras"
 TFLITE_PATH = MODEL_DIR / "multitask_finetuned.tflite"
 
 # ── Global model + fast-call handle ─────────────────────────────────────────
-model       = None\n_predict_fn = None   # compiled tf.function for ~2-3x faster repeated calls\ninterpreter  = None  # TFLite interpreter for optimized inference
-
+model = None
+_predict_fn = None   # compiled tf.function for ~2-3x faster repeated calls
+interpreter = None   # TFLite interpreter for optimized inference
 IMG_SIZE    = 256
 
 # ImageNet-style normalisation (mean/std) for better confidence calibration.
