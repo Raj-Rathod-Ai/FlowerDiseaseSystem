@@ -29,10 +29,13 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 BASE_DIR        = Path(__file__).resolve().parent
 LABEL_MAP_PATH  = BASE_DIR / "manifests" / "label_map.json"
 MODEL_DIR       = BASE_DIR / "models"
-MODEL_PATH      = MODEL_DIR / "multitask_finetuned.keras"\nTFLITE_PATH    = MODEL_DIR / "multitask_finetuned.tflite"
+MODEL_PATH = MODEL_DIR / "multitask_finetuned.keras"
+TFLITE_PATH = MODEL_DIR / "multitask_finetuned.tflite"
 
 # ── Global model + fast-call handle ─────────────────────────────────────────
-model       = None\n_predict_fn = None   # compiled tf.function for ~2-3x faster repeated calls\ninterpreter  = None  # TFLite interpreter for optimized inference
+model = None
+_predict_fn = None   # compiled tf.function for ~2-3x faster repeated calls
+interpreter = None  # TFLite interpreter for optimized inference
 
 IMG_SIZE    = 256
 
@@ -43,9 +46,42 @@ _IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 # ── Model load + JIT compilation ─────────────────────────────────────────────
 
-def ensure_model():\n    global model, _predict_fn, interpreter\n    if interpreter is not None:\n        return True\n    if model is not None:\n        return True
+def ensure_model():
+    global model, _predict_fn, interpreter
+    if interpreter is not None:
+        return True
+    if model is not None:
+        return True
 
-    # Try TFLite first\n    if TFLITE_PATH.exists():\n        try:\n            import tflite_runtime.interpreter as tflite\n            interpreter = tflite.Interpreter(model_path=str(TFLITE_PATH))\n            interpreter.allocate_tensors()\n            global interpreter\n            interpreter = interpreter\n            dummy = np.zeros((1, IMG_SIZE, IMG_SIZE, 3), dtype=np.float32)\n            input_index = interpreter.get_input_details()[0]['index']\n            interpreter.set_tensor(input_index, dummy)\n            interpreter.invoke()\n            print(\"[MODEL] TFLite loaded and warmed up ✅\", flush=True)\n            def _predict_tflite(x):\n                input_index = interpreter.get_input_details()[0]['index']\n                species_output = interpreter.get_output_details()[0]['index']\n                health_output = interpreter.get_output_details()[1]['index']\n                interpreter.set_tensor(input_index, x)\n                interpreter.invoke()\n                return [\n                    interpreter.get_tensor(species_output),\n                    interpreter.get_tensor(health_output)\n                ]\n            global _predict_fn\n            _predict_fn = _predict_tflite\n            return True\n        except Exception as e:\n            print(f\"[TFLITE] Failed: {e}, falling back to Keras\", flush=True)\n\n    print(\"[MODEL] Loading Keras model ...\", flush=True)\n    try:\n        import tensorflow as tf
+    # Try TFLite first
+    if TFLITE_PATH.exists():
+        try:
+            import tflite_runtime.interpreter as tflite
+            interpreter = tflite.Interpreter(model_path=str(TFLITE_PATH))
+            interpreter.allocate_tensors()
+            dummy = np.zeros((1, IMG_SIZE, IMG_SIZE, 3), dtype=np.float32)
+            input_index = interpreter.get_input_details()[0]['index']
+            interpreter.set_tensor(input_index, dummy)
+            interpreter.invoke()
+            print("[MODEL] TFLite loaded and warmed up ✅", flush=True)
+            def _predict_tflite(x):
+                input_index = interpreter.get_input_details()[0]['index']
+                species_output = interpreter.get_output_details()[0]['index']
+                health_output = interpreter.get_output_details()[1]['index']
+                interpreter.set_tensor(input_index, x)
+                interpreter.invoke()
+                return [
+                    interpreter.get_tensor(species_output),
+                    interpreter.get_tensor(health_output)
+                ]
+            _predict_fn = _predict_tflite
+            return True
+        except Exception as e:
+            print(f"[TFLITE] Failed: {e}, falling back to Keras", flush=True)
+
+    print("[MODEL] Loading Keras model ...", flush=True)
+    try:
+        import tensorflow as tf
         keras = tf.keras
 
         print(f"[MODEL] Keras {keras.__version__} | TF {tf.__version__} | backend: {keras.backend.backend()}", flush=True)
@@ -146,6 +182,7 @@ def home():
         "status":       "ok",
         "service":      "FloraScan Backend",
         "model_loaded": model is not None,
+        "tflite_loaded": interpreter is not None,
         "fast_predict": _predict_fn is not None,
         "message":      "Ready for predictions" if model is not None else "Starting model load"
     })
@@ -156,7 +193,8 @@ def health():
     return jsonify({
         "status":          "ok",
         "model_loaded":    model is not None,
-"tflite_loaded":  interpreter is not None,\n        "fast_predict":    _predict_fn is not None,
+        "tflite_loaded":   interpreter is not None,
+        "fast_predict":    _predict_fn is not None,
         "species_classes": list(species_idx_to_name.values()),
         "health_classes":  list(health_idx_to_name.values()),
         "message":         "Model failed to load on startup. It will retry on request." if model is None else "Ready for predictions"
@@ -191,7 +229,8 @@ def image_upload():
             return jsonify({"error": "Could not decode image."}), 400
 
         # Use compiled tf.function when available, else direct model call
-        predict = _predict_fn if _predict_fn is not None else (lambda x: model(x, training=False))\n        preds   = predict(img.astype(np.float16) if interpreter else img)
+        predict = _predict_fn if _predict_fn is not None else (lambda x: model(x, training=False))
+        preds = predict(img.astype(np.float16) if interpreter else img)
 
         if isinstance(preds, dict):
             species_logits = np.array(preds.get("species"))
