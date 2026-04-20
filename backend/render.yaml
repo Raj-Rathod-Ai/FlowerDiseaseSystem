@@ -3,5 +3,14 @@ services:
     name: flowerdiseasesystem
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 300 --workers 1
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 600 --workers 1
     healthCheckPath: /health
+    envVars:
+      - key: TF_CPP_MIN_LOG_LEVEL
+        value: "2"
+      - key: TF_NUM_INTRAOP_THREADS
+        value: "2"
+      - key: TF_NUM_INTEROP_THREADS
+        value: "2"
+      - key: KERAS_BACKEND
+        value: "tensorflow"

@@ -168,8 +168,8 @@ def temperature_scale(logits, temperature=2.5):
 
 # ── Startup pre-load ─────────────────────────────────────────────────────────
 
-print("[STARTUP] Pre-loading model ...", flush=True)
-ensure_model()
+print("[STARTUP] Model will be loaded on first request ...", flush=True)
+# ensure_model()  # Removed: load on first request instead
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -187,6 +187,7 @@ def health():
         "fast_predict":    _predict_fn is not None,
         "species_classes": list(species_idx_to_name.values()),
         "health_classes":  list(health_idx_to_name.values()),
+        "message":         "Model will be loaded on first prediction request" if model is None else "Ready for predictions"
     })
 
 
