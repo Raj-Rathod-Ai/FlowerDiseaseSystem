@@ -29,7 +29,8 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 BASE_DIR        = Path(__file__).resolve().parent
 LABEL_MAP_PATH  = BASE_DIR / "manifests" / "label_map.json"
 MODEL_DIR       = BASE_DIR / "models"
-MODEL_PATH      = MODEL_DIR / "multitask_finetuned.keras"\nTFLITE_PATH    = MODEL_DIR / "multitask_finetuned.tflite"
+MODEL_PATH = MODEL_DIR / "multitask_finetuned.keras"
+TFLITE_PATH = MODEL_DIR / "multitask_finetuned.tflite"
 
 # ── Global model + fast-call handle ─────────────────────────────────────────
 model       = None\n_predict_fn = None   # compiled tf.function for ~2-3x faster repeated calls\ninterpreter  = None  # TFLite interpreter for optimized inference
