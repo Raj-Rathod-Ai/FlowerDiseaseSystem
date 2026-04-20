@@ -1,14 +1,10 @@
 flask==3.0.3
 flask-cors==4.0.1
 gunicorn==22.0.0
-tensorflow-cpu==2.14.2
+
+# ✅ Compatible with Python 3.11
+tensorflow-cpu==2.16.2
+
 opencv-python-headless==4.10.0.84
 numpy==1.26.4
-Pillow==10.2.0
-flask
-flask-cors
-gunicorn
-tensorflow-cpu
-opencv-python-headless
-numpy
-gdown
+gdown==5.2.0
