@@ -14,7 +14,6 @@ import json
 import uuid
 from hashlib import sha512
 from pathlib import Path
-from datetime import datetime
 import sqlite3
 
 import cv2
@@ -30,12 +29,10 @@ BASE_DIR        = Path(__file__).resolve().parent
 LABEL_MAP_PATH  = BASE_DIR / "manifests" / "label_map.json"
 MODEL_DIR       = BASE_DIR / "models"
 MODEL_PATH = MODEL_DIR / "multitask_finetuned.keras"
-TFLITE_PATH = MODEL_DIR / "multitask_finetuned.tflite"
 
 # ── Global model + fast-call handle ─────────────────────────────────────────
 model = None
-_predict_fn = None   # compiled tf.function for ~2-3x faster repeated calls
-interpreter = None  # TFLite interpreter for optimized inference
+_predict_fn = None   
 
 IMG_SIZE    = 256
 
@@ -47,37 +44,9 @@ _IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 # ── Model load + JIT compilation ─────────────────────────────────────────────
 
 def ensure_model():
-    global model, _predict_fn, interpreter
-    if interpreter is not None:
-        return True
+    global model, _predict_fn
     if model is not None:
         return True
-
-    # Try TFLite first
-    if TFLITE_PATH.exists():
-        try:
-            import tflite_runtime.interpreter as tflite
-            interpreter = tflite.Interpreter(model_path=str(TFLITE_PATH))
-            interpreter.allocate_tensors()
-            dummy = np.zeros((1, IMG_SIZE, IMG_SIZE, 3), dtype=np.float32)
-            input_index = interpreter.get_input_details()[0]['index']
-            interpreter.set_tensor(input_index, dummy)
-            interpreter.invoke()
-            print("[MODEL] TFLite loaded and warmed up ✅", flush=True)
-            def _predict_tflite(x):
-                input_index = interpreter.get_input_details()[0]['index']
-                species_output = interpreter.get_output_details()[0]['index']
-                health_output = interpreter.get_output_details()[1]['index']
-                interpreter.set_tensor(input_index, x)
-                interpreter.invoke()
-                return [
-                    interpreter.get_tensor(species_output),
-                    interpreter.get_tensor(health_output)
-                ]
-            _predict_fn = _predict_tflite
-            return True
-        except Exception as e:
-            print(f"[TFLITE] Failed: {e}, falling back to Keras", flush=True)
 
     print("[MODEL] Loading Keras model ...", flush=True)
     try:
@@ -182,7 +151,6 @@ def home():
         "status":       "ok",
         "service":      "FloraScan Backend",
         "model_loaded": model is not None,
-        "tflite_loaded": interpreter is not None,
         "fast_predict": _predict_fn is not None,
         "message":      "Ready for predictions" if model is not None else "Starting model load"
     })
@@ -193,7 +161,6 @@ def health():
     return jsonify({
         "status":          "ok",
         "model_loaded":    model is not None,
-        "tflite_loaded":   interpreter is not None,
         "fast_predict":    _predict_fn is not None,
         "species_classes": list(species_idx_to_name.values()),
         "health_classes":  list(health_idx_to_name.values()),
@@ -230,7 +197,7 @@ def image_upload():
 
         # Use compiled tf.function when available, else direct model call
         predict = _predict_fn if _predict_fn is not None else (lambda x: model(x, training=False))
-        preds = predict(img.astype(np.float16) if interpreter else img)
+        preds   = predict(img)
 
         if isinstance(preds, dict):
             species_logits = np.array(preds.get("species"))
@@ -362,3 +329,4 @@ def add_comment():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
