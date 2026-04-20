@@ -1,0 +1,14 @@
+# Ignore backend model binaries and runtime artifacts
+backend/models/
+
+# Ignore local Python virtual environments
+venv/
+.env
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore npm artifacts
+node_modules/
+client/build/
