@@ -29,14 +29,10 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 BASE_DIR        = Path(__file__).resolve().parent
 LABEL_MAP_PATH  = BASE_DIR / "manifests" / "label_map.json"
 MODEL_DIR       = BASE_DIR / "models"
-MODEL_PATH      = MODEL_DIR / "multitask_finetuned.keras"
-
-HF_REPO_ID    = "rathodraj/flower-disease-models"
-HF_MODEL_FILE = "multitask_finetuned.keras"
+MODEL_PATH      = MODEL_DIR / "multitask_finetuned.keras"\nTFLITE_PATH    = MODEL_DIR / "multitask_finetuned.tflite"
 
 # ── Global model + fast-call handle ─────────────────────────────────────────
-model       = None
-_predict_fn = None   # compiled tf.function for ~2-3x faster repeated calls
+model       = None\n_predict_fn = None   # compiled tf.function for ~2-3x faster repeated calls\ninterpreter  = None  # TFLite interpreter for optimized inference
 
 IMG_SIZE    = 256
 
@@ -45,42 +41,11 @@ _IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 
-# ── Model download ───────────────────────────────────────────────────────────
-
-def download_model():
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    if MODEL_PATH.exists() and MODEL_PATH.stat().st_size > 10_000_000:
-        print(f"[MODEL] Already cached ({MODEL_PATH.stat().st_size / 1e6:.1f} MB)", flush=True)
-        return True
-    print("[MODEL] Downloading from HuggingFace ...", flush=True)
-    try:
-        from huggingface_hub import hf_hub_download
-        hf_hub_download(
-            repo_id=HF_REPO_ID,
-            filename=HF_MODEL_FILE,
-            local_dir=str(MODEL_DIR),
-            local_dir_use_symlinks=False,
-        )
-        size_mb = MODEL_PATH.stat().st_size / 1e6
-        print(f"[MODEL] Downloaded ({size_mb:.1f} MB)", flush=True)
-        return size_mb > 10
-    except Exception as e:
-        print(f"[MODEL] Download failed: {e}", flush=True)
-        return False
-
-
 # ── Model load + JIT compilation ─────────────────────────────────────────────
 
-def ensure_model():
-    global model, _predict_fn
-    if model is not None:
-        return True
-    if not download_model():
-        return False
+def ensure_model():\n    global model, _predict_fn, interpreter\n    if interpreter is not None:\n        return True\n    if model is not None:\n        return True
 
-    print("[MODEL] Loading ...", flush=True)
-    try:
-        import tensorflow as tf
+    # Try TFLite first\n    if TFLITE_PATH.exists():\n        try:\n            import tflite_runtime.interpreter as tflite\n            interpreter = tflite.Interpreter(model_path=str(TFLITE_PATH))\n            interpreter.allocate_tensors()\n            global interpreter\n            interpreter = interpreter\n            dummy = np.zeros((1, IMG_SIZE, IMG_SIZE, 3), dtype=np.float32)\n            input_index = interpreter.get_input_details()[0]['index']\n            interpreter.set_tensor(input_index, dummy)\n            interpreter.invoke()\n            print(\"[MODEL] TFLite loaded and warmed up ✅\", flush=True)\n            def _predict_tflite(x):\n                input_index = interpreter.get_input_details()[0]['index']\n                species_output = interpreter.get_output_details()[0]['index']\n                health_output = interpreter.get_output_details()[1]['index']\n                interpreter.set_tensor(input_index, x)\n                interpreter.invoke()\n                return [\n                    interpreter.get_tensor(species_output),\n                    interpreter.get_tensor(health_output)\n                ]\n            global _predict_fn\n            _predict_fn = _predict_tflite\n            return True\n        except Exception as e:\n            print(f\"[TFLITE] Failed: {e}, falling back to Keras\", flush=True)\n\n    print(\"[MODEL] Loading Keras model ...\", flush=True)\n    try:\n        import tensorflow as tf
         keras = tf.keras
 
         print(f"[MODEL] Keras {keras.__version__} | TF {tf.__version__} | backend: {keras.backend.backend()}", flush=True)
@@ -177,7 +142,13 @@ ensure_model()
 
 @app.route("/")
 def home():
-    return "FloraScan Backend Running ✅"
+    return jsonify({
+        "status":       "ok",
+        "service":      "FloraScan Backend",
+        "model_loaded": model is not None,
+        "fast_predict": _predict_fn is not None,
+        "message":      "Ready for predictions" if model is not None else "Starting model load"
+    })
 
 
 @app.route("/health")
@@ -185,10 +156,10 @@ def health():
     return jsonify({
         "status":          "ok",
         "model_loaded":    model is not None,
-        "fast_predict":    _predict_fn is not None,
+"tflite_loaded":  interpreter is not None,\n        "fast_predict":    _predict_fn is not None,
         "species_classes": list(species_idx_to_name.values()),
         "health_classes":  list(health_idx_to_name.values()),
-        "message":         "Model will be loaded on first prediction request" if model is None else "Ready for predictions"
+        "message":         "Model failed to load on startup. It will retry on request." if model is None else "Ready for predictions"
     })
 
 
@@ -220,8 +191,7 @@ def image_upload():
             return jsonify({"error": "Could not decode image."}), 400
 
         # Use compiled tf.function when available, else direct model call
-        predict = _predict_fn if _predict_fn is not None else (lambda x: model(x, training=False))
-        preds   = predict(img)
+        predict = _predict_fn if _predict_fn is not None else (lambda x: model(x, training=False))\n        preds   = predict(img.astype(np.float16) if interpreter else img)
 
         if isinstance(preds, dict):
             species_logits = np.array(preds.get("species"))
