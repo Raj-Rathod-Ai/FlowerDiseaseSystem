@@ -11,3 +11,5 @@ Thumbs.db
 # Ignore npm artifacts
 node_modules/
 client/build/
+
+backend/models/*.keras
