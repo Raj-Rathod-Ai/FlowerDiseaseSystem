@@ -3,6 +3,8 @@ import "./Services.css";
 
 const API_URL = process.env.REACT_APP_API_URL || "https://flowerdiseasesystem.onrender.com";
 
+const MAX_UPLOAD_ATTEMPTS = 3;
+
 const HEALTHY_SUGGESTIONS = [
   "🌱 Keep up the great care! Your flower is thriving with proper watering and sunlight.",
   "💧 Maintain consistent watering - not too much, not too little. Your plant is happy!",
@@ -37,7 +39,34 @@ function getRandomSuggestion(isHealthy) {
   return suggestions[Math.floor(Math.random() * suggestions.length)];
 }
 
-/* ── Unused components removed for clean build ── */
+const uploadImage = async (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  for (let attempt = 1; attempt <= MAX_UPLOAD_ATTEMPTS; attempt += 1) {
+    try {
+      const res = await fetch(`${API_URL}/image/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Server error (${res.status})${errorText ? `: ${errorText}` : ""}`);
+      }
+
+      return await res.json();
+    } catch (err) {
+      if (attempt === MAX_UPLOAD_ATTEMPTS) {
+        throw err;
+      }
+      console.log("Retrying upload...", attempt, err.message);
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+  }
+
+  throw new Error("Server not responding");
+};
 
 /* ── Skeleton placeholder while loading ── */
 function ResultSkeleton() {
@@ -55,6 +84,7 @@ function Service({ setActiveSection }) {
   const [imageSrc, setImageSrc] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isWakingUp, setIsWakingUp] = useState(false);
   const [result, setResult] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [analysisStep, setAnalysisStep] = useState(0);
@@ -94,37 +124,44 @@ function Service({ setActiveSection }) {
   const onDragLeave = () => setIsDragging(false);
 
   const handleSubmission = async () => {
-    if (!selectedFile) { setErrorMessage("Please upload an image first."); return; }
+    if (!selectedFile) {
+      setErrorMessage("Please upload an image first.");
+      return;
+    }
+
     setErrorMessage("");
     setIsLoading(true);
+    setIsWakingUp(true);
     setResult(null);
     setAnalysisStep(0);
 
-    // Cycle through step messages during loading for better UX
     const stepTimer = setInterval(() =>
       setAnalysisStep((s) => (s < STEPS.length - 1 ? s + 1 : s)), 1200);
 
-    const formData = new FormData();
-    formData.append("file", selectedFile);
     try {
-      const response = await fetch(`${API_URL}/image/upload`, { method: "POST", body: formData });
-      const data = await response.json();
-      if (data.error) setErrorMessage(data.error);
-      else {
+      const data = await uploadImage(selectedFile);
+      if (data.error) {
+        setErrorMessage(data.error);
+      } else {
         setResult(data);
-        // Show review prompt after first successful analysis
         if (!hasCompletedFirstAnalysis) {
           setTimeout(() => {
             setShowReviewPrompt(true);
             setHasCompletedFirstAnalysis(true);
-          }, 2000); // Show after 2 seconds
+          }, 2000);
         }
       }
-    } catch {
-      setErrorMessage("Network error. Please check your connection and try again.");
+    } catch (err) {
+      const lower = err.message?.toLowerCase() || "";
+      if (lower.includes("502") || lower.includes("server error")) {
+        setErrorMessage("Server is waking up or unavailable. Please wait 30 seconds and try again.");
+      } else {
+        setErrorMessage("Network error. Please check your connection and try again.");
+      }
     } finally {
       clearInterval(stepTimer);
       setIsLoading(false);
+      setIsWakingUp(false);
     }
   };
 
@@ -224,7 +261,12 @@ function Service({ setActiveSection }) {
               </div>
             )}
 
-            {/* Error */}
+            {isWakingUp && !errorMessage && isLoading && (
+              <div className="wakeup__message">
+                <span>⏳</span> Server waking up... first request may take up to 30 seconds.
+              </div>
+            )}
+
             {errorMessage && (
               <div className="error__box">
                 <span>⚠️</span> {errorMessage}

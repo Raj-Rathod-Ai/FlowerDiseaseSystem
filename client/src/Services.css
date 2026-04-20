@@ -273,6 +273,19 @@ p.heading.p__color {
   animation: fadeInUp 0.4s ease-out;
 }
 
+.wakeup__message {
+  margin-top: 16px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: rgba(40, 227, 161, 0.14);
+  border: 1px solid rgba(40, 227, 161, 0.28);
+  color: #d6f7de;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+
 /* ── Results panel ── */
 .results__panel {
   min-height: 280px;
