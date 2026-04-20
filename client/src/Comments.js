@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import "./Comments.css";
 
+const BASE_API_URL = process.env.REACT_APP_API_URL || "https://flowerdiseasesystem.onrender.com";
+
 function Comments() {
     const [comments, setComments] = useState([]);
     const [improvements, setImprovements] = useState([]);
@@ -22,7 +24,7 @@ function Comments() {
 
     const fetchComments = async () => {
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL || ""}/comments?type=comment`);
+            const response = await fetch(`${BASE_API_URL}/comments?type=comment`);
             const data = await response.json();
             setComments(data);
         } catch (error) {
@@ -32,7 +34,7 @@ function Comments() {
 
     const fetchImprovements = async () => {
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL || ""}/comments?type=improvement`);
+            const response = await fetch(`${BASE_API_URL}/comments?type=improvement`);
             const data = await response.json();
             setImprovements(data);
         } catch (error) {
@@ -46,7 +48,7 @@ function Comments() {
         setMessage("");
 
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL || ""}/comments`, {
+            const response = await fetch(`${BASE_API_URL}/comments`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

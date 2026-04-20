@@ -24,6 +24,82 @@
     z-index: 1;
 }
 
+.home__subtext {
+    max-width: 780px;
+    margin: 24px 0 32px;
+    color: rgba(235, 245, 230, 0.82);
+    font-size: 19px;
+    line-height: 1.8;
+}
+
+.home__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: flex-start;
+    margin-bottom: 40px;
+}
+
+.home__btn {
+    background: linear-gradient(135deg, rgba(41, 215, 160, 0.96), rgba(32, 197, 174, 0.96));
+    border: none;
+    color: #03110b;
+    padding: 16px 30px;
+    border-radius: 999px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 20px 45px rgba(41, 215, 160, 0.25);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.home__btn:hover {
+    transform: translateY(-2px);
+}
+
+.home__btn--ghost {
+    background: rgba(255, 255, 255, 0.08);
+    color: #e9f7ee;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.home__features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-top: 16px;
+}
+
+.feature__card {
+    flex: 1;
+    min-width: 220px;
+    padding: 22px;
+    border-radius: 24px;
+    background: rgba(6, 20, 14, 0.88);
+    border: 1px solid rgba(52, 204, 146, 0.12);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+}
+
+.feature__card span {
+    display: inline-flex;
+    font-size: 24px;
+    margin-bottom: 14px;
+}
+
+.feature__card strong {
+    display: block;
+    font-size: 18px;
+    margin-bottom: 10px;
+    color: #f3f9f1;
+}
+
+.feature__card p {
+    color: #b6ddbf;
+    line-height: 1.7;
+    font-size: 15px;
+}
+
 h1.home__text {
     font-size: 18px;
     font-weight: 500;

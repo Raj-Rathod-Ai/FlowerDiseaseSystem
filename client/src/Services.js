@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import "./Services.css";
 
-const API_URL = process.env.REACT_APP_API_URL || "";
+const API_URL = process.env.REACT_APP_API_URL || "https://flowerdiseasesystem.onrender.com";
 
 const HEALTHY_SUGGESTIONS = [
   "🌱 Keep up the great care! Your flower is thriving with proper watering and sunlight.",

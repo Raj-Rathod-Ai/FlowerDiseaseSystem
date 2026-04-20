@@ -23,7 +23,8 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 app  = Flask(__name__)
-CORS(app)
+app.config["CORS_HEADERS"] = "Content-Type"
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 BASE_DIR        = Path(__file__).resolve().parent
 LABEL_MAP_PATH  = BASE_DIR / "manifests" / "label_map.json"
