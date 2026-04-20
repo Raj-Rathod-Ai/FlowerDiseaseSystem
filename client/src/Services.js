@@ -37,36 +37,7 @@ function getRandomSuggestion(isHealthy) {
   return suggestions[Math.floor(Math.random() * suggestions.length)];
 }
 
-/* ── Confidence bar with animated fill ── */
-function ConfidenceBar({ label, value, color, active }) {
-  return (
-    <div className="conf__bar__wrap">
-      <div className="conf__bar__label">
-        <span className={active ? "conf__bar__name--active" : ""}>{label}</span>
-        <span style={{ color, fontWeight: active ? 700 : 400 }}>{value}%</span>
-      </div>
-      <div className="conf__bar__bg">
-        <div
-          className="conf__bar__fill"
-          style={{ width: `${value}%`, background: color }}
-        />
-      </div>
-    </div>
-  );
-}
-
-/* ── Confidence badge chip ── */
-function ConfidenceBadge({ value }) {
-  const tier =
-    value >= 85 ? { label: "High Confidence", color: "#4caf50" } :
-      value >= 60 ? { label: "Medium Confidence", color: "#ff9800" } :
-        { label: "Low Confidence", color: "#f44336" };
-  return (
-    <span className="conf__badge" style={{ color: tier.color, borderColor: tier.color }}>
-      {tier.label}
-    </span>
-  );
-}
+/* ── Unused components removed for clean build ── */
 
 /* ── Skeleton placeholder while loading ── */
 function ResultSkeleton() {
